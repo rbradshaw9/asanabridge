@@ -41,10 +41,13 @@ jobs:
           git pull origin main
           
           # Install dependencies
-          npm ci --production
+          npm ci
           
           # Build application
           npm run build
+          
+          # Remove dev dependencies after build
+          npm ci --production
           
           # Run database migrations
           npx prisma migrate deploy
@@ -67,10 +70,13 @@ jobs:
           cd /var/www/asanabridge/omnifocus-agent
           
           # Install agent dependencies
-          npm ci --production
+          npm ci
           
           # Build agent
           npm run build
+          
+          # Remove dev dependencies after build
+          npm ci --production
           
           # Restart agent with PM2
           pm2 restart omnifocus-agent || pm2 start dist/agent.js --name omnifocus-agent

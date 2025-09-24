@@ -41,14 +41,19 @@ cd asanabridge
 
 # Install dependencies and build
 echo "📦 Installing dependencies..."
-npm ci --production
+npm ci
 npm run build
+
+# Remove dev dependencies after build
+echo "🧹 Cleaning up dev dependencies..."
+npm ci --production
 
 # Install agent dependencies and build
 echo "📦 Installing agent dependencies..."
 cd omnifocus-agent
-npm ci --production
+npm ci
 npm run build
+npm ci --production
 cd ..
 
 # Create environment file
