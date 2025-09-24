@@ -66,20 +66,7 @@ app.get('/api/status', (_req, res) => {
   });
 });
 
-// Placeholder auth routes (mock for now)
-app.post('/api/auth/register', (req, res) => {
-  const { email, password, name } = req.body;
-  // TODO: Implement actual registration with Prisma
-  logger.info('Registration attempt', { email });
-  res.json({ message: 'Registration endpoint - to be implemented' });
-});
-
-app.post('/api/auth/login', (req, res) => {
-  const { email, password } = req.body;
-  // TODO: Implement actual login with JWT
-  logger.info('Login attempt', { email });
-  res.json({ message: 'Login endpoint - to be implemented' });
-});
+// Auth routes are now properly implemented in ./routes/auth.ts
 
 // Catch-all for API routes
 app.use('/api/*', (_req, res) => {
