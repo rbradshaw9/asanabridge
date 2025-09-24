@@ -37,14 +37,18 @@ jobs:
           # Navigate to app directory
           cd /var/www/asanabridge
           
-          # Backup production environment file
-          cp .env .env.backup 2>/dev/null || true
+          # Backup production environment file to a safe location
+          cp .env /tmp/asanabridge-env-backup 2>/dev/null || true
           
-          # Pull latest code
+          # Reset any conflicted files and clean working directory
+          git reset --hard HEAD
+          git clean -fd
+          
+          # Pull latest code (should work now with clean state)
           git pull origin main
           
           # Restore production environment file
-          cp .env.backup .env 2>/dev/null || true
+          cp /tmp/asanabridge-env-backup .env 2>/dev/null || true
           
           # Install dependencies
           npm ci
