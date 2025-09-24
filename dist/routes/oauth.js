@@ -56,8 +56,8 @@ router.get('/asana/callback', async (req, res) => {
             asanaUserGid: asanaUser.gid,
             asanaUserEmail: asanaUser.email
         });
-        // Redirect to frontend success page
-        res.redirect(`${process.env.FRONTEND_URL}/dashboard?asana=connected`);
+        // Redirect to success page
+        res.redirect(`/?asana=connected`);
     }
     catch (error) {
         logger_1.logger.error('Asana OAuth callback error', error);
