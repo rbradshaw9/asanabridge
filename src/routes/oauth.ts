@@ -7,6 +7,18 @@ import { prisma } from '../config/database';
 
 const router = Router();
 
+// Simple Asana OAuth info endpoint (public)
+router.get('/asana', (req: Request, res: Response) => {
+  res.json({ 
+    message: 'Asana OAuth Integration',
+    endpoints: {
+      authorize: '/api/oauth/asana/authorize',
+      callback: '/api/oauth/asana/callback'
+    },
+    status: 'ready'
+  });
+});
+
 // Initiate Asana OAuth flow
 router.get('/asana/authorize', authenticateToken, (req: AuthenticatedRequest, res: Response) => {
   try {

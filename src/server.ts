@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import path from 'path';
 import { loadEnv } from './config/env';
 import { logger } from './config/logger';
 import { prisma } from './config/database';
@@ -39,26 +40,18 @@ app.get('/health', async (_req, res) => {
   }
 });
 
-// Root route
+// Serve static files from public directory
+app.use(express.static('public'));
+
+// Root route serves the landing page
 app.get('/', (_req, res) => {
-  res.json({
-    service: 'AsanaBridge API',
-    version: '0.1.0',
-    environment: env.NODE_ENV,
-    status: 'running',
-    endpoints: {
-      health: '/health',
-      auth: '/api/auth/*',
-      oauth: '/api/oauth/*', 
-      sync: '/api/sync/*',
-      agent: '/api/agent/*'
-    },
-    documentation: 'https://github.com/rbradshaw9/asanabridge'
-  });
+  res.sendFile(path.join(__dirname, '../public/index.html'));
 });
 
 // API Routes
 app.use('/api/oauth', oauthRoutes);
+import authRoutes from './routes/auth';
+app.use('/api/auth', authRoutes);
 import agentRoutes from './routes/agent';
 app.use('/api/agent', agentRoutes);
 import syncRoutes from './routes/sync';

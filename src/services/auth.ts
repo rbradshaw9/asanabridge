@@ -39,6 +39,18 @@ export class AuthService {
   }
 }
 
+// Export convenience functions
+export const generateToken = (userId: string): string => {
+  // For now, just include userId - we can expand the payload later
+  return jwt.sign({ userId }, env.JWT_SECRET, {
+    expiresIn: env.JWT_EXPIRES_IN,
+  } as SignOptions);
+};
+
+export const verifyToken = (token: string): any => {
+  return jwt.verify(token, env.JWT_SECRET);
+};
+
 export function authenticateToken(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
