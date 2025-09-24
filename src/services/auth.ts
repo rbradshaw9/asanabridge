@@ -1,4 +1,4 @@
-import jwt from 'jsonwebtoken';
+import jwt, { SignOptions } from 'jsonwebtoken';
 import crypto from 'crypto';
 import { Request, Response, NextFunction } from 'express';
 import { env } from '../config/env';
@@ -31,7 +31,7 @@ export class AuthService {
   static generateToken(payload: JWTPayload): string {
     return jwt.sign(payload, env.JWT_SECRET, {
       expiresIn: env.JWT_EXPIRES_IN,
-    });
+    } as SignOptions);
   }
 
   static verifyToken(token: string): JWTPayload {

@@ -78,7 +78,7 @@ export class AsanaOAuth {
       : null;
 
     await prisma.asanaToken.upsert({
-      where: { userId },
+      where: { userId: userId },
       update: {
         accessToken: tokens.access_token,
         refreshToken: tokens.refresh_token,
