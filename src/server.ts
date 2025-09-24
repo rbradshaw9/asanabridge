@@ -56,6 +56,8 @@ import agentRoutes from './routes/agent';
 app.use('/api/agent', agentRoutes);
 import syncRoutes from './routes/sync';
 app.use('/api/sync', syncRoutes);
+import downloadRoutes from './routes/download';
+app.use('/api/download', downloadRoutes);
 
 // Basic API routes (will expand these)
 app.get('/api/status', (_req, res) => {
