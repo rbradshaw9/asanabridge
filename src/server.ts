@@ -39,6 +39,24 @@ app.get('/health', async (_req, res) => {
   }
 });
 
+// Root route
+app.get('/', (_req, res) => {
+  res.json({
+    service: 'AsanaBridge API',
+    version: '0.1.0',
+    environment: env.NODE_ENV,
+    status: 'running',
+    endpoints: {
+      health: '/health',
+      auth: '/api/auth/*',
+      oauth: '/api/oauth/*', 
+      sync: '/api/sync/*',
+      agent: '/api/agent/*'
+    },
+    documentation: 'https://github.com/rbradshaw9/asanabridge'
+  });
+});
+
 // API Routes
 app.use('/api/oauth', oauthRoutes);
 import agentRoutes from './routes/agent';
