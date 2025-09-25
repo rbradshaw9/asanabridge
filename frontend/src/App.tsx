@@ -1,6 +1,7 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import LandingPage from './components/LandingPage';
 import LoginPage from './components/LoginPage';
 import Dashboard from './components/Dashboard';
 
@@ -37,8 +38,9 @@ function App() {
     <AuthProvider>
       <Router>
         <Routes>
+          <Route path="/" element={<LandingPage />} />
           <Route 
-            path="/login" 
+            path="/auth" 
             element={
               <PublicRoute>
                 <LoginPage />
@@ -53,7 +55,6 @@ function App() {
               </ProtectedRoute>
             } 
           />
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
         </Routes>
       </Router>
     </AuthProvider>
