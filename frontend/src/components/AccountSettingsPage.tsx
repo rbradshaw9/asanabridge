@@ -71,8 +71,8 @@ const AccountSettingsPage: React.FC = () => {
     setSuccessMessage('');
     
     try {
-      // TODO: Implement profile update API
-      setSuccessMessage('Profile update API coming soon!');
+      await authApi.updateProfile(profileData.name);
+      setSuccessMessage('Profile updated successfully!');
       setTimeout(() => setSuccessMessage(''), 3000);
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to update profile');
@@ -102,8 +102,8 @@ const AccountSettingsPage: React.FC = () => {
     setSuccessMessage('');
     
     try {
-      // TODO: Implement password update API
-      setSuccessMessage('Password update API coming soon!');
+      await authApi.updatePassword(passwordData.currentPassword, passwordData.newPassword);
+      setSuccessMessage('Password updated successfully!');
       setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
       setTimeout(() => setSuccessMessage(''), 3000);
     } catch (err: any) {

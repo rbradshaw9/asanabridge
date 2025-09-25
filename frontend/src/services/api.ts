@@ -122,6 +122,12 @@ export const authApi = {
   
   getSyncMappings: () =>
     api.get<{ mappings: any[] }>('/sync/mappings'),
+
+  updateProfile: (name: string) =>
+    api.patch('/auth/profile', { name }),
+
+  updatePassword: (currentPassword: string, newPassword: string) =>
+    api.patch('/auth/password', { currentPassword, newPassword }),
   
   health: () =>
     api.get('/health'),

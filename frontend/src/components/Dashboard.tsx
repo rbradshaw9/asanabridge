@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
 import { authApi } from '../services/api';
 import { 
   User, 
@@ -14,8 +15,67 @@ import {
   Zap
 } from 'lucide-react';
 
+// User Menu Component
+const UserMenu: React.FC<{
+  user: any;
+  onLogout: () => void;
+  onAccountSettings: () => void;
+}> = ({ user, onLogout, onAccountSettings }) => {
+  const [isOpen, setIsOpen] = useState(false);
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="flex items-center gap-2 text-gray-300 hover:text-white transition-colors p-2 rounded-lg hover:bg-white/10"
+      >
+        <User size={20} />
+        <span>{user?.name?.split(' ')[0]}</span>
+        <svg className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+
+      {isOpen && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setIsOpen(false)}></div>
+          <div className="absolute right-0 mt-2 w-48 bg-slate-800 border border-white/20 rounded-lg shadow-lg z-20">
+            <div className="py-2">
+              <div className="px-4 py-2 border-b border-white/10">
+                <p className="text-sm font-medium text-white">{user?.name}</p>
+                <p className="text-xs text-gray-400">{user?.email}</p>
+              </div>
+              <button
+                onClick={() => {
+                  onAccountSettings();
+                  setIsOpen(false);
+                }}
+                className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:text-white hover:bg-white/10 transition-colors flex items-center gap-2"
+              >
+                <Settings size={16} />
+                Account Settings
+              </button>
+              <button
+                onClick={() => {
+                  onLogout();
+                  setIsOpen(false);
+                }}
+                className="w-full text-left px-4 py-2 text-sm text-red-400 hover:text-red-300 hover:bg-red-600/10 transition-colors flex items-center gap-2"
+              >
+                <LogOut size={16} />
+                Logout
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
+
 const Dashboard: React.FC = () => {
   const { user, logout } = useAuth();
+  const navigate = useNavigate();
   const [asanaConnected, setAsanaConnected] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -324,17 +384,16 @@ const Dashboard: React.FC = () => {
             </div>
             
             <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2 text-gray-300">
-                <User size={20} />
-                <span>{user?.name}</span>
-              </div>
-              <button
-                onClick={logout}
-                className="flex items-center gap-2 px-4 py-2 bg-red-600/20 text-red-400 rounded-lg hover:bg-red-600/30 transition-colors"
-              >
-                <LogOut size={16} />
-                Logout
-              </button>
+              {planInfo?.plan === 'FREE' && (
+                <button
+                  onClick={() => navigate('/account')}
+                  className="px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white text-sm font-semibold rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all duration-200"
+                >
+                  Upgrade to Pro
+                </button>
+              )}
+              
+              <UserMenu user={user} onLogout={logout} onAccountSettings={() => navigate('/account')} />
             </div>
           </div>
         </div>
@@ -389,7 +448,7 @@ const Dashboard: React.FC = () => {
               <div className="mt-3 px-3 py-2 bg-yellow-600/20 rounded-lg flex flex-col sm:flex-row sm:items-center gap-2">
                 <p className="text-yellow-400 text-sm flex-1">Plan limit reached.</p>
                 <button 
-                  onClick={() => window.open('/account', '_blank')}
+                  onClick={() => navigate('/account')}
                   className="px-3 py-1 bg-gradient-to-r from-blue-600 to-purple-600 text-white text-xs font-semibold rounded hover:from-blue-700 hover:to-purple-700 transition-all duration-200"
                 >
                   Upgrade
@@ -403,7 +462,7 @@ const Dashboard: React.FC = () => {
                     📅 Free plan: Hourly sync • 🚀 Pro plan: Real-time sync (5min intervals)
                   </p>
                   <button 
-                    onClick={() => window.open('/account', '_blank')}
+                    onClick={() => navigate('/account')}
                     className="px-2 py-1 bg-gradient-to-r from-blue-600/50 to-purple-600/50 text-blue-200 text-xs font-medium rounded hover:from-blue-600 hover:to-purple-600 hover:text-white transition-all duration-200"
                   >
                     Upgrade
@@ -470,17 +529,7 @@ const Dashboard: React.FC = () => {
               </div>
             </div>
             
-            {error && (
-              <div className="mb-4 bg-red-500/20 border border-red-500/50 rounded-lg p-3 text-red-200 text-sm">
-                {error}
-              </div>
-            )}
 
-            {successMessage && (
-              <div className="mb-4 bg-green-500/20 border border-green-500/50 rounded-lg p-3 text-green-200 text-sm">
-                {successMessage}
-              </div>
-            )}
 
             {asanaConnected && asanaUser && (
               <div className="mb-4 bg-blue-500/20 border border-blue-500/50 rounded-lg p-3 text-blue-200 text-sm">
@@ -645,13 +694,7 @@ const Dashboard: React.FC = () => {
                   </button>
                 </>
               )}
-              <button 
-                onClick={() => window.open('https://github.com/rbradshaw9/asanabridge#setup', '_blank')}
-                className="px-4 py-2 bg-white/10 text-gray-300 rounded-lg hover:bg-white/20 transition-colors"
-                title="Setup Instructions"
-              >
-                <Settings size={16} />
-              </button>
+
             </div>
           </div>
         </div>
@@ -775,7 +818,7 @@ const Dashboard: React.FC = () => {
                       </p>
                     </div>
                     <button 
-                      onClick={() => window.open('/account', '_blank')}
+                      onClick={() => navigate('/account')}
                       className="px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white text-sm font-semibold rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all duration-200 transform hover:scale-105 shadow-lg"
                     >
                       Upgrade to Pro

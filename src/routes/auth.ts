@@ -185,4 +185,53 @@ router.patch('/profile', authenticateToken, async (req: AuthenticatedRequest, re
   }
 });
 
+// Update user password
+router.patch('/password', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ error: 'Current password and new password are required' });
+    }
+    
+    if (newPassword.length < 6) {
+      return res.status(400).json({ error: 'New password must be at least 6 characters' });
+    }
+    
+    // Get current user
+    const user = await prisma.user.findUnique({
+      where: { id: req.user!.userId }
+    });
+    
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    // Verify current password
+    const isCurrentPasswordValid = await bcrypt.compare(currentPassword, user.password);
+    if (!isCurrentPasswordValid) {
+      return res.status(400).json({ error: 'Current password is incorrect' });
+    }
+    
+    // Hash new password
+    const hashedNewPassword = await bcrypt.hash(newPassword, 12);
+    
+    // Update password
+    await prisma.user.update({
+      where: { id: req.user!.userId },
+      data: { password: hashedNewPassword }
+    });
+    
+    logger.info('User password updated', { userId: user.id });
+    
+    res.json({
+      message: 'Password updated successfully'
+    });
+    
+  } catch (error) {
+    logger.error('Password update error', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 export default router;
