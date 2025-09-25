@@ -6,7 +6,7 @@ import { authenticateToken, AuthenticatedRequest } from '../services/auth';
 const router = Router();
 
 // Download agent for authenticated users
-router.get('/download', authenticateToken, (req: AuthenticatedRequest, res: Response) => {
+router.get('/agent', authenticateToken, (req: AuthenticatedRequest, res: Response) => {
   const userId = req.user!.userId;
   
   // Determine user's platform (for now, assume macOS)

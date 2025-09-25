@@ -60,6 +60,19 @@ export interface AsanaStatusResponse {
   };
 }
 
+export interface AgentKeyResponse {
+  agentKey: string;
+  message: string;
+}
+
+export interface AgentStatusResponse {
+  connected: boolean;
+  hasKey: boolean;
+  lastSeen?: string;
+  version?: string;
+  message?: string;
+}
+
 export const authApi = {
   register: (email: string, password: string, name: string) =>
     api.post<AuthResponse>('/auth/register', { email, password, name }),
@@ -75,6 +88,15 @@ export const authApi = {
   
   getAsanaStatus: () =>
     api.get<AsanaStatusResponse>('/oauth/asana/status'),
+  
+  getAsanaProjects: () =>
+    api.get<{ projects: any[] }>('/oauth/asana/projects'),
+  
+  generateAgentKey: () =>
+    api.post<AgentKeyResponse>('/agent/generate-key'),
+  
+  getAgentStatus: () =>
+    api.get<AgentStatusResponse>('/agent/status'),
   
   health: () =>
     api.get('/health'),
