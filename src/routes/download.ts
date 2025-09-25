@@ -13,21 +13,21 @@ router.get('/agent', authenticateToken, (req: AuthenticatedRequest, res: Respons
   const platform = 'macos';
   const arch = 'universal'; // We'll build universal binaries
   
-  const agentPath = path.join(__dirname, '../../omnifocus-agent/releases/asanabridge-agent-macos');
+  const dmgPath = path.join(__dirname, '../../omnifocus-agent/build/AsanaBridge-Installer.dmg');
   
-  if (!fs.existsSync(agentPath)) {
+  if (!fs.existsSync(dmgPath)) {
     return res.status(404).json({ 
       error: 'Agent download not available yet',
-      message: 'The OmniFocus agent is being prepared. Please try again shortly.'
+      message: 'The OmniFocus agent installer is being prepared. Please try again shortly.'
     });
   }
   
   // Set headers for download
-  res.setHeader('Content-Disposition', 'attachment; filename="AsanaBridge-OmniFocus-Agent"');
-  res.setHeader('Content-Type', 'application/octet-stream');
+  res.setHeader('Content-Disposition', 'attachment; filename="AsanaBridge-Installer.dmg"');
+  res.setHeader('Content-Type', 'application/x-apple-diskimage');
   
-  // Send the file
-  res.sendFile(agentPath);
+  // Send the DMG file
+  res.sendFile(dmgPath);
 });
 
 // Get download instructions
@@ -36,14 +36,15 @@ router.get('/instructions', authenticateToken, (req: AuthenticatedRequest, res: 
   
   res.json({
     instructions: [
-      '1. Download the AsanaBridge OmniFocus Agent',
-      '2. Move the agent to your Applications folder',
-      '3. Open Terminal and navigate to where you saved the agent',
-      '4. Run: chmod +x AsanaBridge-OmniFocus-Agent',
-      '5. Run: ./AsanaBridge-OmniFocus-Agent',
-      '6. When prompted, enter your AsanaBridge credentials',
-      '7. Grant permissions when macOS asks for OmniFocus access',
-      '8. The agent will start syncing your tasks automatically!'
+      '1. Download the AsanaBridge installer (DMG file)',
+      '2. Double-click the DMG to open it',
+      '3. Drag AsanaBridge to your Applications folder',
+      '4. Open AsanaBridge from Applications',
+      '5. If macOS shows a security warning, go to System Preferences > Security & Privacy and click "Open Anyway"',
+      '6. Copy your Agent Key from the dashboard',
+      '7. Paste the key when AsanaBridge asks for it',
+      '8. Grant permissions when macOS asks for OmniFocus access',
+      '9. AsanaBridge will start syncing your tasks automatically!'
     ],
     apiEndpoint: process.env.NODE_ENV === 'production' ? 'https://asanabridge.com/api' : 'http://localhost:3000/api',
     userId: userId,
