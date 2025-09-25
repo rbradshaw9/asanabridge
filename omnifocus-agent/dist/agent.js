@@ -9,13 +9,36 @@ const dotenv_1 = __importDefault(require("dotenv"));
 const node_cron_1 = __importDefault(require("node-cron"));
 const omnifocus_client_1 = require("./omnifocus-client");
 const api_client_1 = require("./api-client");
-// Load environment
+const setup_wizard_1 = require("./setup-wizard");
+// Load environment - try various locations
 dotenv_1.default.config();
-const config = (0, api_client_1.loadAgentConfig)();
+// Check if setup is needed
+async function initializeAgent() {
+    const setupNeeded = await setup_wizard_1.SetupWizard.checkAndRunSetup();
+    if (setupNeeded) {
+        console.log('✅ Setup completed. Starting agent...\n');
+    }
+    // Load configuration after setup
+    const config = (0, api_client_1.loadAgentConfig)();
+    const agent = new AsanaBridgeAgent(config);
+    // Graceful shutdown handlers
+    process.on('SIGTERM', () => agent.stop());
+    process.on('SIGINT', () => agent.stop());
+    await agent.start();
+}
+// Only run if this file is executed directly
+if (require.main === module) {
+    // Start the initialization process
+    initializeAgent().catch(error => {
+        console.error('❌ Failed to initialize agent:', error);
+        process.exit(1);
+    });
+}
 class AsanaBridgeAgent {
-    constructor() {
+    constructor(config) {
         this.isRunning = false;
         this.syncInProgress = false;
+        this.config = config;
         this.omnifocus = new omnifocus_client_1.OmniFocusClient();
         this.api = new api_client_1.AsanaBridgeAPI(config);
     }
@@ -33,7 +56,7 @@ class AsanaBridgeAgent {
             // Schedule periodic sync
             this.scheduleSync();
             this.isRunning = true;
-            console.log(`✅ Agent running - sync every ${config.SYNC_INTERVAL_MINUTES} minutes`);
+            console.log(`✅ Agent running - sync every ${this.config.SYNC_INTERVAL_MINUTES} minutes`);
             // Initial sync
             await this.performSync();
         }
@@ -72,7 +95,7 @@ class AsanaBridgeAgent {
         });
     }
     scheduleSync() {
-        const cronPattern = `*/${config.SYNC_INTERVAL_MINUTES} * * * *`;
+        const cronPattern = `*/${this.config.SYNC_INTERVAL_MINUTES} * * * *`;
         node_cron_1.default.schedule(cronPattern, async () => {
             if (!this.syncInProgress) {
                 await this.performSync();
@@ -170,19 +193,3 @@ class AsanaBridgeAgent {
     }
 }
 exports.AsanaBridgeAgent = AsanaBridgeAgent;
-// Main execution
-async function main() {
-    const agent = new AsanaBridgeAgent();
-    // Graceful shutdown handlers
-    process.on('SIGTERM', () => agent.stop());
-    process.on('SIGINT', () => agent.stop());
-    // Start the agent
-    await agent.start();
-}
-// Only run if this file is executed directly
-if (require.main === module) {
-    main().catch((error) => {
-        console.error('💥 Agent crashed:', error);
-        process.exit(1);
-    });
-}

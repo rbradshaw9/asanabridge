@@ -28,6 +28,6 @@
   "pkg": {
     "scripts": "dist/**/*.js",
     "assets": "scripts/**/*",
-    "targets": ["node20-macos-x64", "node20-macos-arm64"]
+    "targets": ["node18-macos-arm64"]
   }
 }
