@@ -65,8 +65,46 @@ router.get('/asana/callback', async (req: Request, res: Response) => {
       asanaUserEmail: asanaUser.email
     });
 
-    // Redirect to success page
-    res.redirect(`/?asana=connected`);
+    // Send HTML that closes the popup window
+    res.send(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Asana Connected</title>
+          <style>
+            body { 
+              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              height: 100vh;
+              margin: 0;
+              background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+              color: white;
+            }
+            .success {
+              text-align: center;
+              background: rgba(255,255,255,0.1);
+              padding: 2rem;
+              border-radius: 12px;
+              backdrop-filter: blur(10px);
+            }
+          </style>
+        </head>
+        <body>
+          <div class="success">
+            <h2>✅ Successfully Connected to Asana!</h2>
+            <p>You can close this window.</p>
+          </div>
+          <script>
+            // Close the popup after a short delay
+            setTimeout(() => {
+              window.close();
+            }, 2000);
+          </script>
+        </body>
+      </html>
+    `);
   } catch (error) {
     logger.error('Asana OAuth callback error', error);
     res.status(500).json({ error: 'Failed to complete authorization' });

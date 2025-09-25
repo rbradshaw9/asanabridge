@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { authApi } from '../services/api';
 import { 
@@ -16,20 +16,82 @@ import {
 
 const Dashboard: React.FC = () => {
   const { user, logout } = useAuth();
-  const [asanaConnected] = useState(false);
+  const [asanaConnected, setAsanaConnected] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
+  const [asanaUser, setAsanaUser] = useState<{name: string, email: string} | null>(null);
+
+  // Check Asana connection status on component mount
+  useEffect(() => {
+    checkAsanaStatus();
+  }, []);
+
+  const checkAsanaStatus = async () => {
+    try {
+      const response = await authApi.getAsanaStatus();
+      setAsanaConnected(response.data.connected);
+      if (response.data.connected && response.data.user) {
+        setAsanaUser({ 
+          name: response.data.user.name, 
+          email: response.data.user.email 
+        });
+      }
+    } catch (err) {
+      console.log('Asana not connected');
+      setAsanaConnected(false);
+    }
+  };
 
   const handleAsanaConnect = async () => {
     setLoading(true);
     setError('');
+    setSuccessMessage('');
     
     try {
       const response = await authApi.getAsanaAuthUrl();
-      window.location.href = response.data.authUrl;
+      
+      // Open OAuth in popup window
+      const popup = window.open(
+        response.data.authUrl,
+        'asana-oauth',
+        'width=600,height=700,scrollbars=yes,resizable=yes'
+      );
+
+      if (!popup) {
+        throw new Error('Popup blocked. Please allow popups and try again.');
+      }
+
+      // Poll for popup closure and check connection status
+      const checkClosed = setInterval(async () => {
+        if (popup.closed) {
+          clearInterval(checkClosed);
+          setLoading(false);
+          
+          // Check if connection was successful
+          setTimeout(async () => {
+            try {
+              const statusResponse = await authApi.getAsanaStatus();
+              if (statusResponse.data.connected) {
+                setAsanaConnected(true);
+                if (statusResponse.data.user) {
+                  setAsanaUser({ 
+                    name: statusResponse.data.user.name, 
+                    email: statusResponse.data.user.email 
+                  });
+                }
+                setSuccessMessage('Successfully connected to Asana!');
+                setTimeout(() => setSuccessMessage(''), 5000);
+              }
+            } catch (err) {
+              console.log('Connection check failed');
+            }
+          }, 1000);
+        }
+      }, 1000);
+
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to get Asana authorization URL');
-    } finally {
+      setError(err.response?.data?.error || err.message || 'Failed to get Asana authorization URL');
       setLoading(false);
     }
   };
@@ -144,6 +206,18 @@ const Dashboard: React.FC = () => {
             {error && (
               <div className="mb-4 bg-red-500/20 border border-red-500/50 rounded-lg p-3 text-red-200 text-sm">
                 {error}
+              </div>
+            )}
+
+            {successMessage && (
+              <div className="mb-4 bg-green-500/20 border border-green-500/50 rounded-lg p-3 text-green-200 text-sm">
+                {successMessage}
+              </div>
+            )}
+
+            {asanaConnected && asanaUser && (
+              <div className="mb-4 bg-blue-500/20 border border-blue-500/50 rounded-lg p-3 text-blue-200 text-sm">
+                Connected as: <strong>{asanaUser.name}</strong> ({asanaUser.email})
               </div>
             )}
 

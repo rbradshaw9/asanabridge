@@ -51,6 +51,15 @@ export interface AsanaAuthResponse {
   message: string;
 }
 
+export interface AsanaStatusResponse {
+  connected: boolean;
+  user?: {
+    name: string;
+    email: string;
+    gid: string;
+  };
+}
+
 export const authApi = {
   register: (email: string, password: string, name: string) =>
     api.post<AuthResponse>('/auth/register', { email, password, name }),
@@ -63,6 +72,9 @@ export const authApi = {
   
   getAsanaAuthUrl: () =>
     api.get<AsanaAuthResponse>('/oauth/asana/authorize'),
+  
+  getAsanaStatus: () =>
+    api.get<AsanaStatusResponse>('/oauth/asana/status'),
   
   health: () =>
     api.get('/health'),
