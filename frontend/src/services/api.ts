@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_BASE_URL = 'https://143.110.152.9:3000';
+const API_BASE_URL = 'https://asanabridge.com';
 
 const api = axios.create({
   baseURL: API_BASE_URL,

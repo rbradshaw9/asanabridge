@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { LogIn, UserPlus, Eye, EyeOff } from 'lucide-react';
+import { LogIn, UserPlus, Eye, EyeOff, Github, Chrome, Zap } from 'lucide-react';
 
 const LoginPage: React.FC = () => {
   const [isLogin, setIsLogin] = useState(true);
@@ -12,6 +12,11 @@ const LoginPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   
   const { login, register } = useAuth();
+
+  const handleSocialLogin = (provider: string) => {
+    // TODO: Implement social authentication
+    alert(`${provider} authentication coming soon!`);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,9 +40,12 @@ const LoginPage: React.FC = () => {
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center p-4">
       <div className="bg-white/10 backdrop-blur-md rounded-2xl p-8 w-full max-w-md border border-white/20">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-white mb-2">AsanaBridge</h1>
-          <p className="text-gray-300">
-            {isLogin ? 'Welcome back!' : 'Create your account'}
+          <div className="flex items-center justify-center mb-4">
+            <Zap className="h-8 w-8 text-blue-400 mr-2" />
+            <h1 className="text-3xl font-bold text-white">AsanaBridge</h1>
+          </div>
+          <p className="text-gray-300 text-sm">
+            {isLogin ? 'Welcome back! Sign in to continue your productivity journey.' : 'Join thousands of users streamlining their workflow.'}
           </p>
         </div>
 
@@ -117,13 +125,46 @@ const LoginPage: React.FC = () => {
           </button>
         </form>
 
+        {/* Social Login Section */}
+        <div className="mt-6">
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-white/20"></div>
+            </div>
+            <div className="relative flex justify-center text-sm">
+              <span className="px-2 bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-gray-400">Or continue with</span>
+            </div>
+          </div>
+
+          <div className="mt-6 grid grid-cols-3 gap-3">
+            <button
+              onClick={() => handleSocialLogin('Google')}
+              className="w-full inline-flex justify-center py-2 px-4 border border-white/20 rounded-lg bg-white/10 text-sm font-medium text-gray-300 hover:bg-white/20 transition-colors duration-200"
+            >
+              <Chrome className="h-5 w-5" />
+            </button>
+            <button
+              onClick={() => handleSocialLogin('GitHub')}
+              className="w-full inline-flex justify-center py-2 px-4 border border-white/20 rounded-lg bg-white/10 text-sm font-medium text-gray-300 hover:bg-white/20 transition-colors duration-200"
+            >
+              <Github className="h-5 w-5" />
+            </button>
+            <button
+              onClick={() => handleSocialLogin('Asana')}
+              className="w-full inline-flex justify-center py-2 px-4 border border-white/20 rounded-lg bg-white/10 text-sm font-medium text-gray-300 hover:bg-white/20 transition-colors duration-200"
+            >
+              <Zap className="h-5 w-5" />
+            </button>
+          </div>
+        </div>
+
         <div className="mt-6 text-center">
           <button
             onClick={() => {
               setIsLogin(!isLogin);
               setError('');
             }}
-            className="text-blue-400 hover:text-blue-300 text-sm"
+            className="text-blue-400 hover:text-blue-300 text-sm transition-colors duration-200"
           >
             {isLogin 
               ? "Don't have an account? Sign up" 
