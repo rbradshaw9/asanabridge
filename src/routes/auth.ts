@@ -207,6 +207,10 @@ router.patch('/password', authenticateToken, async (req: AuthenticatedRequest, r
       return res.status(404).json({ error: 'User not found' });
     }
     
+    if (!user.password) {
+      return res.status(400).json({ error: 'No password set for this user' });
+    }
+    
     // Verify current password
     const isCurrentPasswordValid = await bcrypt.compare(currentPassword, user.password);
     if (!isCurrentPasswordValid) {
