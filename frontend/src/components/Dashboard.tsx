@@ -92,6 +92,18 @@ const Dashboard: React.FC = () => {
 
   const handleSetupSync = () => {
     setShowProjectSelection(true);
+    // Load projects when modal opens
+    if (asanaProjects.length === 0) {
+      loadAsanaProjects();
+    }
+  };
+
+  const handleDisconnectAsana = async () => {
+    // For now, just clear local state and refresh
+    setAsanaConnected(false);
+    setAsanaUser(null);
+    setAsanaProjects([]);
+    setSuccessMessage('Asana disconnected. You can reconnect anytime.');
   };
 
   const handleAsanaConnect = async () => {
@@ -152,14 +164,31 @@ const Dashboard: React.FC = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
       {/* Header */}
+            {/* Global Success/Error Messages */}
+      {(successMessage || error) && (
+        <div className={`fixed top-4 left-1/2 transform -translate-x-1/2 z-50 px-6 py-3 rounded-lg shadow-lg max-w-md w-full mx-4 ${
+          error ? 'bg-red-500/90 text-white' : 'bg-green-500/90 text-white'
+        } backdrop-blur-sm`}>
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium">{error || successMessage}</span>
+            <button
+              onClick={() => { setError(''); setSuccessMessage(''); }}
+              className="ml-2 text-white/80 hover:text-white"
+            >
+              <XCircle size={16} />
+            </button>
+          </div>
+        </div>
+      )}
+
       <header className="bg-white/10 backdrop-blur-md border-b border-white/20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-4">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-                <Zap className="text-white" size={20} />
+          <div className="flex items-center justify-between h-16">
+            <div className="flex items-center gap-4">
+              <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
+                <span className="text-white font-bold text-sm">AB</span>
               </div>
-              <h1 className="text-2xl font-bold text-white">AsanaBridge</h1>
+              <h1 className="text-xl font-semibold text-white">AsanaBridge</h1>
             </div>
             
             <div className="flex items-center gap-4">
@@ -256,18 +285,6 @@ const Dashboard: React.FC = () => {
               </div>
             </div>
             
-            {error && (
-              <div className="mb-4 bg-red-500/20 border border-red-500/50 rounded-lg p-3 text-red-200 text-sm">
-                {error}
-              </div>
-            )}
-
-            {successMessage && (
-              <div className="mb-4 bg-green-500/20 border border-green-500/50 rounded-lg p-3 text-green-200 text-sm">
-                {successMessage}
-              </div>
-            )}
-
             {asanaConnected && asanaUser && (
               <div className="mb-4 bg-blue-500/20 border border-blue-500/50 rounded-lg p-3 text-blue-200 text-sm">
                 Connected as: <strong>{asanaUser.name}</strong> ({asanaUser.email})
@@ -305,6 +322,13 @@ const Dashboard: React.FC = () => {
                     title="Reconnect Asana"
                   >
                     <RefreshCw size={16} />
+                  </button>
+                  <button 
+                    onClick={handleDisconnectAsana}
+                    className="px-4 py-2 bg-red-600/80 hover:bg-red-600 text-white rounded-lg transition-colors"
+                    title="Disconnect Asana"
+                  >
+                    <XCircle size={16} />
                   </button>
                 </>
               )}
@@ -357,6 +381,8 @@ const Dashboard: React.FC = () => {
                   onClick={() => {
                     navigator.clipboard.writeText(agentKey);
                     setSuccessMessage('Agent key copied to clipboard!');
+                    // Hide the key after copying for better UX
+                    setTimeout(() => setShowAgentKey(false), 3000);
                   }}
                   className="mt-2 text-xs text-yellow-300 hover:text-yellow-200"
                 >
@@ -404,7 +430,34 @@ const Dashboard: React.FC = () => {
               ) : (
                 <>
                   <button
-                    onClick={() => window.open('/api/download/agent', '_blank')}
+                    onClick={async () => {
+                      try {
+                        const token = localStorage.getItem('token');
+                        const response = await fetch('/api/download/agent', {
+                          headers: {
+                            'Authorization': `Bearer ${token}`
+                          }
+                        });
+                        
+                        if (response.ok) {
+                          const blob = await response.blob();
+                          const url = window.URL.createObjectURL(blob);
+                          const a = document.createElement('a');
+                          a.href = url;
+                          a.download = 'AsanaBridge-OmniFocus-Agent';
+                          document.body.appendChild(a);
+                          a.click();
+                          document.body.removeChild(a);
+                          window.URL.revokeObjectURL(url);
+                          setSuccessMessage('Agent download started!');
+                        } else {
+                          const errorData = await response.json();
+                          setError(errorData.error || 'Download failed');
+                        }
+                      } catch (err) {
+                        setError('Download failed. Please try again.');
+                      }
+                    }}
                     className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition duration-200 flex items-center justify-center gap-2"
                   >
                     <Calendar size={16} />
@@ -413,13 +466,16 @@ const Dashboard: React.FC = () => {
                   <button
                     onClick={handleGenerateAgentKey}
                     disabled={loading}
-                    className="px-4 py-2 bg-yellow-600/80 hover:bg-yellow-600 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="px-4 py-2 bg-yellow-600/80 hover:bg-yellow-600 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                     title="Regenerate Agent Key"
                   >
                     {loading ? (
                       <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
                     ) : (
-                      <RefreshCw size={16} />
+                      <>
+                        <RefreshCw size={16} />
+                        <span className="text-xs hidden sm:inline">New Key</span>
+                      </>
                     )}
                   </button>
                 </>
