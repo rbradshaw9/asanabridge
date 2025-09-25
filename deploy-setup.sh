@@ -1,9 +1,20 @@
 #!/bin/bash
 
 # DigitalOcean Droplet Setup Script for AsanaBridge
-# Run this script on your droplet: ./deploy-setup.sh
+# 
+# REQUIRED: Set database password before running:
+# export DB_PASSWORD="your_database_password"
+# 
+# Then run: ./deploy-setup.sh
 
 set -e
+
+# Check required environment variables
+if [ -z "$DB_PASSWORD" ]; then
+    echo "❌ Error: DB_PASSWORD environment variable is required"
+    echo "Run: export DB_PASSWORD=\"your_database_password\""
+    exit 1
+fi
 
 echo "🚀 Setting up AsanaBridge on DigitalOcean droplet..."
 
@@ -60,7 +71,7 @@ cd ..
 echo "🔧 Creating environment configuration..."
 cat > .env << EOL
 # Database Configuration (DigitalOcean Managed Database)
-DATABASE_URL="postgresql://doadmin:[PASSWORD]@dbaas-db-8209766-do-user-[ID]-0.c.db.ondigitalocean.com:25060/defaultdb?sslmode=require"
+DATABASE_URL="postgresql://doadmin:\${DB_PASSWORD}@dbaas-db-5131174-do-user-271673-0.k.db.ondigitalocean.com:25060/defaultdb?sslmode=require"
 
 # Server Configuration
 NODE_ENV=production
@@ -76,7 +87,49 @@ ASANA_REDIRECT_URI=https://asanabridge.com/oauth/asana/callback
 FRONTEND_URL=https://asanabridge.com
 EOL
 
-echo "⚠️  IMPORTANT: Edit .env file with your actual database credentials and Asana API keys"
+echo "⚠️  IMPORTANT: Edit .env file with your actual Asana API keys"
+
+# Setup nginx configuration
+echo "🌐 Configuring nginx..."
+sudo tee /etc/nginx/sites-available/asanabridge << EOL
+server {
+    listen 80;
+    server_name asanabridge.com www.asanabridge.com;
+
+    location / {
+        proxy_pass http://localhost:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_cache_bypass \$http_upgrade;
+    }
+}
+EOL
+
+# Enable the site and test nginx config
+sudo ln -sf /etc/nginx/sites-available/asanabridge /etc/nginx/sites-enabled/
+sudo nginx -t
+sudo systemctl reload nginx
+
+# Install Certbot and get SSL certificate
+echo "🔒 Setting up SSL certificate..."
+sudo apt install -y certbot python3-certbot-nginx
+sudo certbot --nginx -d asanabridge.com -d www.asanabridge.com --non-interactive --agree-tos --email rbradshaw@gmail.com
+
+# Create PM2 log directory
+echo "📝 Creating PM2 log directory..."
+sudo mkdir -p /var/log/pm2
+sudo chown -R $USER:$USER /var/log/pm2
+
+# Start application with PM2
+echo "🚀 Starting application..."
+pm2 start ecosystem.config.js
+pm2 startup
+pm2 save
 
 # Setup nginx configuration
 echo "🌐 Configuring nginx..."

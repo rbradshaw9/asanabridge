@@ -1,16 +1,16 @@
 # AsanaBridge Deployment Guide
 
-✅ **DEPLOYMENT COMPLETE** - AsanaBridge API is live at https://asanabridge.com
+✅ **DEPLOYMENT IN PROGRESS** - New AsanaBridge API deployment
 
 ## 🚀 Production Environment
 
 **Infrastructure:**
-- **Droplet IP:** 45.55.166.134 (Ubuntu 22.04)
-- **Database:** dbaas-db-8209766 (DigitalOcean Managed PostgreSQL)  
+- **Droplet IP:** 143.110.152.9 (Ubuntu 22.04 LTS)
+- **Database:** dbaas-db-5131174 (DigitalOcean Managed PostgreSQL)
 - **Domain:** asanabridge.com (SSL enabled with Let's Encrypt)
-- **Process Manager:** PM2 with auto-restart
-- **Web Server:** Nginx reverse proxy
-- **SSL Certificate:** Valid until December 23, 2025
+- **Process Manager:** PM2 with auto-restart and log rotation
+- **Web Server:** Nginx reverse proxy with HTTP/2
+- **Security:** UFW firewall, Fail2ban, SSL/TLS configuration
 
 ## 🎯 Live API Endpoints
 
