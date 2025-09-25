@@ -39,16 +39,16 @@ const UserMenu: React.FC<{
 
       {isOpen && (
         <>
-          <div className="fixed inset-0 z-10" onClick={() => setIsOpen(false)}></div>
-          <div className="absolute right-0 mt-2 w-48 bg-slate-800 border border-white/20 rounded-lg shadow-lg z-20">
+          <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)}></div>
+          <div className="absolute right-0 mt-2 w-56 bg-slate-800 border border-white/20 rounded-lg shadow-lg z-50">
             <div className="py-2">
               <div className="px-4 py-2 border-b border-white/10">
-                <p className="text-sm font-medium text-white">{user?.name}</p>
-                <p className="text-xs text-gray-400">{user?.email}</p>
+                <p className="text-sm font-medium text-white truncate">{user?.name}</p>
+                <p className="text-xs text-gray-400 truncate">{user?.email}</p>
               </div>
               <button
                 onClick={() => {
-                  navigate('/account-settings?tab=profile');
+                  navigate('/account?tab=profile');
                   setIsOpen(false);
                 }}
                 className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:text-white hover:bg-white/10 transition-colors flex items-center gap-2"
@@ -58,7 +58,7 @@ const UserMenu: React.FC<{
               </button>
               <button
                 onClick={() => {
-                  navigate('/account-settings?tab=billing');
+                  navigate('/account?tab=billing');
                   setIsOpen(false);
                 }}
                 className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:text-white hover:bg-white/10 transition-colors flex items-center gap-2"
@@ -254,6 +254,32 @@ const Dashboard: React.FC = () => {
       } else {
         setError(err.response?.data?.error || 'Failed to create sync mappings');
       }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteSyncMapping = async (mappingId: string, projectName: string) => {
+    if (!confirm(`Are you sure you want to delete the sync for "${projectName}"? This will remove the project from OmniFocus and cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError('');
+      
+      await authApi.deleteSyncMapping(mappingId);
+      
+      setSuccessMessage(`Successfully deleted sync for "${projectName}"`);
+      
+      // Refresh data
+      loadPlanInfo();
+      loadSyncMappings();
+      
+      setTimeout(() => setSuccessMessage(''), 5000);
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to delete sync mapping');
+      setTimeout(() => setError(''), 5000);
     } finally {
       setLoading(false);
     }
@@ -791,7 +817,7 @@ const Dashboard: React.FC = () => {
                         }}
                       >
                         <div className="flex items-center justify-between">
-                          <div>
+                          <div className="flex-1">
                             <div className="flex items-center gap-2">
                               <h4 className="text-white font-semibold">{project.name}</h4>
                               {isAlreadySynced && (
@@ -802,15 +828,31 @@ const Dashboard: React.FC = () => {
                             </div>
                             <p className="text-gray-400 text-sm">{project.notes || 'No description'}</p>
                           </div>
-                          <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
-                            isAlreadySynced
-                              ? 'border-green-500 bg-green-500'
-                              : isSelected
-                              ? 'border-blue-500 bg-blue-500'
-                              : 'border-gray-400'
-                          }`}>
-                            {(isAlreadySynced || isSelected) && (
-                              <CheckCircle className="text-white" size={16} />
+                          <div className="flex items-center gap-2">
+                            {isAlreadySynced ? (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const mapping = syncMappings.find(m => m.asanaProjectId === project.gid);
+                                  if (mapping) {
+                                    handleDeleteSyncMapping(mapping.id, project.name);
+                                  }
+                                }}
+                                className="px-3 py-1 bg-red-500/20 text-red-400 text-xs font-medium rounded hover:bg-red-500/30 transition-colors"
+                                disabled={loading}
+                              >
+                                Delete Sync
+                              </button>
+                            ) : (
+                              <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
+                                isSelected
+                                  ? 'border-blue-500 bg-blue-500'
+                                  : 'border-gray-400'
+                              }`}>
+                                {isSelected && (
+                                  <CheckCircle className="text-white" size={16} />
+                                )}
+                              </div>
                             )}
                           </div>
                         </div>

@@ -123,6 +123,9 @@ export const authApi = {
   getSyncMappings: () =>
     api.get<{ mappings: any[] }>('/sync/mappings'),
 
+  deleteSyncMapping: (mappingId: string) =>
+    api.delete(`/sync/mappings/${mappingId}`),
+
   updateProfile: (name: string) =>
     api.patch('/auth/profile', { name }),
 
