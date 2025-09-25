@@ -18,6 +18,39 @@ router.post('/mappings', authenticateToken, async (req: AuthenticatedRequest, re
       });
     }
 
+    // Get user with plan information
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { plan: true }
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Check plan limits
+    const currentMappings = await prisma.syncMapping.count({
+      where: { userId, isActive: true }
+    });
+
+    const planLimits: Record<string, number> = {
+      FREE: 2,
+      PRO: Infinity,
+      ENTERPRISE: Infinity
+    };
+
+    const maxProjects = planLimits[user.plan] || 2; // Default to FREE plan limits
+    if (currentMappings >= maxProjects) {
+      const limitText = maxProjects === Infinity ? 'unlimited' : maxProjects.toString();
+      return res.status(403).json({ 
+        error: 'Project limit reached',
+        message: `Your ${user.plan} plan allows up to ${limitText} projects. Upgrade to Pro for unlimited projects.`,
+        currentCount: currentMappings,
+        maxAllowed: maxProjects === Infinity ? -1 : maxProjects,
+        planType: user.plan
+      });
+    }
+
     // Check if mapping already exists
     const existing = await prisma.syncMapping.findUnique({
       where: { 
@@ -230,6 +263,52 @@ router.get('/stats', authenticateToken, async (req: AuthenticatedRequest, res: R
   } catch (error: any) {
     logger.error('Failed to fetch sync stats', error);
     res.status(500).json({ error: 'Failed to fetch stats' });
+  }
+});
+
+// Get user plan information and limits
+router.get('/plan', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const userId = req.user!.userId;
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { plan: true, createdAt: true }
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const currentMappings = await prisma.syncMapping.count({
+      where: { userId, isActive: true }
+    });
+
+    const planLimits: Record<string, number> = {
+      FREE: 2,
+      PRO: Infinity,
+      ENTERPRISE: Infinity
+    };
+
+    const maxProjects = planLimits[user.plan] || 2;
+    const isUnlimited = maxProjects === Infinity;
+
+    res.json({
+      plan: user.plan,
+      currentProjects: currentMappings,
+      maxProjects: isUnlimited ? -1 : maxProjects,
+      isUnlimited,
+      canAddMore: isUnlimited || currentMappings < maxProjects,
+      memberSince: user.createdAt,
+      features: {
+        unlimitedProjects: user.plan !== 'FREE',
+        prioritySupport: user.plan === 'ENTERPRISE',
+        advancedSync: user.plan !== 'FREE'
+      }
+    });
+  } catch (error: any) {
+    logger.error('Failed to fetch plan info', error);
+    res.status(500).json({ error: 'Failed to fetch plan info' });
   }
 });
 

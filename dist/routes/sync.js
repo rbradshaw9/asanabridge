@@ -16,6 +16,34 @@ router.post('/mappings', auth_1.authenticateToken, async (req, res) => {
                 error: 'Missing required fields: asanaProjectId, asanaProjectName, omnifocusProjectName'
             });
         }
+        // Get user with plan information
+        const user = await database_1.prisma.user.findUnique({
+            where: { id: userId },
+            select: { plan: true }
+        });
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+        // Check plan limits
+        const currentMappings = await database_1.prisma.syncMapping.count({
+            where: { userId, isActive: true }
+        });
+        const planLimits = {
+            FREE: 2,
+            PRO: Infinity,
+            ENTERPRISE: Infinity
+        };
+        const maxProjects = planLimits[user.plan] || 2; // Default to FREE plan limits
+        if (currentMappings >= maxProjects) {
+            const limitText = maxProjects === Infinity ? 'unlimited' : maxProjects.toString();
+            return res.status(403).json({
+                error: 'Project limit reached',
+                message: `Your ${user.plan} plan allows up to ${limitText} projects. Upgrade to Pro for unlimited projects.`,
+                currentCount: currentMappings,
+                maxAllowed: maxProjects === Infinity ? -1 : maxProjects,
+                planType: user.plan
+            });
+        }
         // Check if mapping already exists
         const existing = await database_1.prisma.syncMapping.findUnique({
             where: {
@@ -202,6 +230,46 @@ router.get('/stats', auth_1.authenticateToken, async (req, res) => {
     catch (error) {
         logger_1.logger.error('Failed to fetch sync stats', error);
         res.status(500).json({ error: 'Failed to fetch stats' });
+    }
+});
+// Get user plan information and limits
+router.get('/plan', auth_1.authenticateToken, async (req, res) => {
+    try {
+        const userId = req.user.userId;
+        const user = await database_1.prisma.user.findUnique({
+            where: { id: userId },
+            select: { plan: true, createdAt: true }
+        });
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+        const currentMappings = await database_1.prisma.syncMapping.count({
+            where: { userId, isActive: true }
+        });
+        const planLimits = {
+            FREE: 2,
+            PRO: Infinity,
+            ENTERPRISE: Infinity
+        };
+        const maxProjects = planLimits[user.plan] || 2;
+        const isUnlimited = maxProjects === Infinity;
+        res.json({
+            plan: user.plan,
+            currentProjects: currentMappings,
+            maxProjects: isUnlimited ? -1 : maxProjects,
+            isUnlimited,
+            canAddMore: isUnlimited || currentMappings < maxProjects,
+            memberSince: user.createdAt,
+            features: {
+                unlimitedProjects: user.plan !== 'FREE',
+                prioritySupport: user.plan === 'ENTERPRISE',
+                advancedSync: user.plan !== 'FREE'
+            }
+        });
+    }
+    catch (error) {
+        logger_1.logger.error('Failed to fetch plan info', error);
+        res.status(500).json({ error: 'Failed to fetch plan info' });
     }
 });
 exports.default = router;

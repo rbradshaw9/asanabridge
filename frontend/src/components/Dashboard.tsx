@@ -27,11 +27,19 @@ const Dashboard: React.FC = () => {
   const [agentStatus, setAgentStatus] = useState<{connected: boolean, hasKey: boolean, lastSeen?: string, version?: string}>({connected: false, hasKey: false});
   const [agentKey, setAgentKey] = useState<string>('');
   const [showAgentKey, setShowAgentKey] = useState(false);
+  const [planInfo, setPlanInfo] = useState<{
+    plan: string;
+    currentProjects: number;
+    maxProjects: number;
+    isUnlimited: boolean;
+    canAddMore: boolean;
+  } | null>(null);
 
   // Check Asana connection status on component mount
   useEffect(() => {
     checkAsanaStatus();
     checkAgentStatus();
+    loadPlanInfo();
   }, []);
 
   const checkAsanaStatus = async () => {
@@ -61,9 +69,22 @@ const Dashboard: React.FC = () => {
   const checkAgentStatus = async () => {
     try {
       const response = await authApi.getAgentStatus();
-      setAgentStatus(response.data);
+      setAgentStatus({
+        connected: response.data.isOnline,
+        hasKey: response.data.hasKey,
+        lastSeen: response.data.lastHeartbeat
+      });
     } catch (err) {
       console.log('Failed to check agent status:', err);
+    }
+  };
+
+  const loadPlanInfo = async () => {
+    try {
+      const response = await authApi.getPlanInfo();
+      setPlanInfo(response.data);
+    } catch (err) {
+      console.log('Failed to load plan info:', err);
     }
   };
 
@@ -109,6 +130,50 @@ const Dashboard: React.FC = () => {
 
   const handleSetupSync = () => {
     setShowProjectSelection(true);
+  };
+
+  const handleCreateSyncMappings = async () => {
+    if (selectedProjects.length === 0) {
+      setError('Please select at least one project');
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+    setSuccessMessage('');
+
+    try {
+      // Create sync mappings for selected projects
+      const promises = selectedProjects.map(async (projectId) => {
+        const project = asanaProjects.find(p => p.gid === projectId);
+        if (!project) return;
+
+        return await authApi.createSyncMapping(
+          project.gid,
+          project.name,
+          project.name // Use same name for OmniFocus initially
+        );
+      });
+
+      await Promise.all(promises);
+      
+      setSuccessMessage(`Successfully set up sync for ${selectedProjects.length} project(s)!`);
+      setShowProjectSelection(false);
+      setSelectedProjects([]);
+      
+      // Refresh plan info to show updated usage
+      loadPlanInfo();
+      
+      setTimeout(() => setSuccessMessage(''), 5000);
+    } catch (err: any) {
+      if (err.response?.status === 403 && err.response?.data?.error === 'Project limit reached') {
+        setError(err.response.data.message);
+      } else {
+        setError(err.response?.data?.error || 'Failed to create sync mappings');
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleAsanaConnect = async () => {
@@ -212,13 +277,23 @@ const Dashboard: React.FC = () => {
           <div className="bg-white/10 backdrop-blur-md rounded-xl p-6 border border-white/20">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-gray-400 text-sm">Account Status</p>
+                <p className="text-gray-400 text-sm">Plan & Usage</p>
                 <p className="text-2xl font-bold text-white">{user?.plan}</p>
+                {planInfo && (
+                  <p className="text-gray-400 text-xs mt-1">
+                    {planInfo.currentProjects} / {planInfo.isUnlimited ? '∞' : planInfo.maxProjects} projects
+                  </p>
+                )}
               </div>
-              <div className="w-12 h-12 bg-green-600/20 rounded-lg flex items-center justify-center">
-                <CheckCircle className="text-green-400" size={24} />
+              <div className={`w-12 h-12 ${planInfo?.canAddMore ? 'bg-green-600/20' : 'bg-yellow-600/20'} rounded-lg flex items-center justify-center`}>
+                <CheckCircle className={planInfo?.canAddMore ? 'text-green-400' : 'text-yellow-400'} size={24} />
               </div>
             </div>
+            {planInfo && !planInfo.canAddMore && (
+              <div className="mt-3 px-3 py-2 bg-yellow-600/20 rounded-lg">
+                <p className="text-yellow-400 text-sm">Plan limit reached. Upgrade to Pro for unlimited projects.</p>
+              </div>
+            )}
           </div>
 
           <div className="bg-white/10 backdrop-blur-md rounded-xl p-6 border border-white/20">
@@ -484,7 +559,12 @@ const Dashboard: React.FC = () => {
                 <div>
                   <h3 className="text-xl font-bold text-white">Select Asana Projects</h3>
                   <p className="text-gray-400 text-sm mt-1">
-                    Choose up to {user?.plan === 'PRO' ? 'unlimited' : '2'} projects to sync with OmniFocus
+                    Choose up to {planInfo?.isUnlimited ? 'unlimited' : (planInfo?.maxProjects || 2)} projects to sync with OmniFocus
+                    {planInfo && (
+                      <span className="ml-2 text-xs">
+                        ({planInfo.currentProjects} / {planInfo.isUnlimited ? '∞' : planInfo.maxProjects} used)
+                      </span>
+                    )}
                   </p>
                 </div>
                 <button
@@ -514,12 +594,16 @@ const Dashboard: React.FC = () => {
                       }`}
                       onClick={() => {
                         const isSelected = selectedProjects.includes(project.gid);
-                        const maxProjects = user?.plan === 'PRO' ? Infinity : 2;
+                        const maxAllowed = planInfo ? (planInfo.isUnlimited ? Infinity : planInfo.maxProjects) : 2;
+                        const availableSlots = maxAllowed - (planInfo?.currentProjects || 0);
                         
                         if (isSelected) {
                           setSelectedProjects(prev => prev.filter(id => id !== project.gid));
-                        } else if (selectedProjects.length < maxProjects) {
+                        } else if (selectedProjects.length < availableSlots) {
                           setSelectedProjects(prev => [...prev, project.gid]);
+                        } else {
+                          setError(`You've reached your ${planInfo?.plan || 'FREE'} plan limit. Upgrade to Pro for unlimited projects.`);
+                          setTimeout(() => setError(''), 3000);
                         }
                       }}
                     >
@@ -543,10 +627,10 @@ const Dashboard: React.FC = () => {
                 </div>
               )}
               
-              {user?.plan !== 'PRO' && selectedProjects.length >= 2 && (
+              {planInfo && !planInfo.isUnlimited && (planInfo.currentProjects + selectedProjects.length) >= planInfo.maxProjects && (
                 <div className="mt-4 p-3 bg-amber-500/20 border border-amber-500/50 rounded-lg">
                   <p className="text-amber-200 text-sm">
-                    🎯 Free accounts can sync up to 2 projects. <a href="#" className="underline">Upgrade to Pro</a> for unlimited projects.
+                    🎯 {planInfo.plan} accounts can sync up to {planInfo.maxProjects} projects. <a href="#" className="underline">Upgrade to Pro</a> for unlimited projects.
                   </p>
                 </div>
               )}
@@ -560,15 +644,18 @@ const Dashboard: React.FC = () => {
                 Cancel
               </button>
               <button
-                onClick={() => {
-                  // TODO: Save selected projects and set up sync
-                  console.log('Selected projects:', selectedProjects);
-                  setShowProjectSelection(false);
-                }}
-                disabled={selectedProjects.length === 0}
-                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                onClick={handleCreateSyncMappings}
+                disabled={selectedProjects.length === 0 || loading}
+                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
               >
-                Set Up Sync ({selectedProjects.length} projects)
+                {loading ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    Setting up...
+                  </>
+                ) : (
+                  `Set Up Sync (${selectedProjects.length} projects)`
+                )}
               </button>
             </div>
           </div>

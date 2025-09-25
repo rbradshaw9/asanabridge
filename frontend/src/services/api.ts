@@ -66,11 +66,24 @@ export interface AgentKeyResponse {
 }
 
 export interface AgentStatusResponse {
-  connected: boolean;
   hasKey: boolean;
-  lastSeen?: string;
-  version?: string;
-  message?: string;
+  keyCreatedAt?: string;
+  lastHeartbeat?: string;
+  isOnline: boolean;
+}
+
+export interface PlanInfoResponse {
+  plan: string;
+  currentProjects: number;
+  maxProjects: number;
+  isUnlimited: boolean;
+  canAddMore: boolean;
+  memberSince: string;
+  features: {
+    unlimitedProjects: boolean;
+    prioritySupport: boolean;
+    advancedSync: boolean;
+  };
 }
 
 export const authApi = {
@@ -100,6 +113,12 @@ export const authApi = {
   
   getAgentStatus: () =>
     api.get<AgentStatusResponse>('/agent/status'),
+  
+  getPlanInfo: () =>
+    api.get<PlanInfoResponse>('/sync/plan'),
+  
+  createSyncMapping: (asanaProjectId: string, asanaProjectName: string, omnifocusProjectName: string) =>
+    api.post('/sync/mapping', { asanaProjectId, asanaProjectName, omnifocusProjectName }),
   
   health: () =>
     api.get('/health'),
