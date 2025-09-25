@@ -63,7 +63,7 @@ jobs:
           npx prisma migrate deploy
           
           # Restart application with PM2
-          pm2 restart asanabridge || pm2 start dist/server.js --name asanabridge
+          pm2 restart asanabridge-api || pm2 start dist/server.js --name asanabridge-api
           
           # Save PM2 configuration
           pm2 save
@@ -97,4 +97,4 @@ jobs:
     - name: Health Check
       run: |
         sleep 30
-        curl -f https://asanabridge.com/health || exit 1
+        curl -f https://asanabridge.com/api/health || exit 1
