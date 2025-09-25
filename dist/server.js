@@ -18,6 +18,7 @@ const agent_1 = __importDefault(require("./routes/agent"));
 const sync_1 = __importDefault(require("./routes/sync"));
 const download_1 = __importDefault(require("./routes/download"));
 const deploy_info_1 = __importDefault(require("./routes/deploy-info"));
+const admin_1 = __importDefault(require("./routes/admin"));
 // Load environment variables first
 dotenv_1.default.config();
 const env = (0, env_1.loadEnv)();
@@ -105,6 +106,7 @@ app.use('/api/agent', agent_1.default);
 app.use('/api/sync', sync_1.default);
 app.use('/api/download', download_1.default);
 app.use('/api/deploy', deploy_info_1.default);
+app.use('/api/admin', admin_1.default);
 // Basic API routes (will expand these)
 app.get('/api/status', (_req, res) => {
     res.json({

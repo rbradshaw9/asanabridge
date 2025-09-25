@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.verifyToken = exports.generateToken = exports.AuthService = void 0;
+exports.requireAdmin = exports.verifyToken = exports.generateToken = exports.AuthService = void 0;
 exports.authenticateToken = authenticateToken;
 exports.requirePlan = requirePlan;
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
@@ -71,3 +71,12 @@ function requirePlan(plan) {
         next();
     };
 }
+const requireAdmin = (req, res, next) => {
+    if (!req.user || !req.user.isAdmin) {
+        logger_1.logger.warn('Admin access attempt by non-admin user', { userId: req.user?.userId });
+        res.status(403).json({ error: 'Admin access required' });
+        return;
+    }
+    next();
+};
+exports.requireAdmin = requireAdmin;

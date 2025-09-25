@@ -127,7 +127,7 @@ router.get('/users/:userId', async (req: AuthenticatedRequest, res: Response) =>
             id: true,
             asanaProjectId: true,
             asanaProjectName: true,
-            omnifocusProjectName: true,
+            ofProjectName: true,
             createdAt: true,
             lastSyncAt: true
           }

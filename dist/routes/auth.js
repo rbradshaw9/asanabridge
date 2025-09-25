@@ -45,12 +45,18 @@ router.post('/register', async (req, res) => {
                 email: true,
                 name: true,
                 plan: true,
+                isAdmin: true,
                 createdAt: true
             }
         });
-        // Generate JWT token
-        const token = (0, auth_1.generateToken)(user.id);
-        logger_1.logger.info('User registered successfully', { userId: user.id, email: user.email });
+        // Generate JWT token with full payload
+        const token = auth_1.AuthService.generateToken({
+            userId: user.id,
+            email: user.email,
+            plan: user.plan,
+            isAdmin: user.isAdmin
+        });
+        logger_1.logger.info('User registered successfully', { userId: user.id, email: user.email, isAdmin: user.isAdmin });
         res.status(201).json({
             message: 'User registered successfully',
             user,
@@ -84,15 +90,21 @@ router.post('/login', async (req, res) => {
         if (!isValidPassword) {
             return res.status(401).json({ error: 'Invalid email or password' });
         }
-        // Generate JWT token
-        const token = (0, auth_1.generateToken)(user.id);
-        logger_1.logger.info('User logged in successfully', { userId: user.id, email: user.email });
+        // Generate JWT token with full payload
+        const token = auth_1.AuthService.generateToken({
+            userId: user.id,
+            email: user.email,
+            plan: user.plan,
+            isAdmin: user.isAdmin
+        });
+        logger_1.logger.info('User logged in successfully', { userId: user.id, email: user.email, isAdmin: user.isAdmin });
         res.json({
             message: 'Login successful',
             user: {
                 id: user.id,
                 email: user.email,
                 name: user.name,
+                isAdmin: user.isAdmin,
                 plan: user.plan,
                 createdAt: user.createdAt
             },
@@ -158,6 +170,48 @@ router.patch('/profile', auth_1.authenticateToken, async (req, res) => {
     }
     catch (error) {
         logger_1.logger.error('Profile update error', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+// Update user password
+router.patch('/password', auth_1.authenticateToken, async (req, res) => {
+    try {
+        const { currentPassword, newPassword } = req.body;
+        if (!currentPassword || !newPassword) {
+            return res.status(400).json({ error: 'Current password and new password are required' });
+        }
+        if (newPassword.length < 6) {
+            return res.status(400).json({ error: 'New password must be at least 6 characters' });
+        }
+        // Get current user
+        const user = await database_1.prisma.user.findUnique({
+            where: { id: req.user.userId }
+        });
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+        if (!user.password) {
+            return res.status(400).json({ error: 'No password set for this user' });
+        }
+        // Verify current password
+        const isCurrentPasswordValid = await bcrypt_1.default.compare(currentPassword, user.password);
+        if (!isCurrentPasswordValid) {
+            return res.status(400).json({ error: 'Current password is incorrect' });
+        }
+        // Hash new password
+        const hashedNewPassword = await bcrypt_1.default.hash(newPassword, 12);
+        // Update password
+        await database_1.prisma.user.update({
+            where: { id: req.user.userId },
+            data: { password: hashedNewPassword }
+        });
+        logger_1.logger.info('User password updated', { userId: user.id });
+        res.json({
+            message: 'Password updated successfully'
+        });
+    }
+    catch (error) {
+        logger_1.logger.error('Password update error', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 });

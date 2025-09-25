@@ -48,6 +48,7 @@ router.post('/register', async (req: Request, res: Response) => {
         email: true,
         name: true,
         plan: true,
+        isAdmin: true,
         createdAt: true
       }
     });

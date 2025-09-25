@@ -118,10 +118,8 @@ const Dashboard: React.FC = () => {
   const checkAsanaStatus = async () => {
     try {
       const response = await authApi.getAsanaStatus();
-      console.log('Asana status response:', response.data);
       setAsanaConnected(response.data.connected);
       if (response.data.connected && response.data.user) {
-        console.log('Asana user:', response.data.user);
         setAsanaUser({ 
           name: response.data.user.name, 
           email: response.data.user.email 
@@ -180,9 +178,7 @@ const Dashboard: React.FC = () => {
 
   const loadAsanaProjects = async () => {
     try {
-      console.log('Loading Asana projects...');
       const response = await authApi.getAsanaProjects();
-      console.log('Projects response:', response.data);
       setAsanaProjects(response.data.projects || []);
     } catch (err) {
       console.error('Failed to load Asana projects:', err);
