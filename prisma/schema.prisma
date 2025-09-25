@@ -13,14 +13,26 @@ datasource db {
 model User {
   id        String   @id @default(cuid())
   email     String   @unique
-  password  String
+  password  String?  // Optional for social auth users
   name      String?
+  avatar    String?  // Profile picture URL from social providers
   plan      UserPlan @default(FREE)
+  
+  // Usage tracking for free tier limits
+  monthlyTasksUsed Int      @default(0)
+  lastUsageReset   DateTime @default(now())
+  
+  // Authentication metadata
+  emailVerified    Boolean  @default(false)
+  signupMethod     SignupMethod @default(EMAIL)
+  lastLoginAt      DateTime?
+  
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  // OAuth tokens
+  // OAuth tokens and social accounts
   asanaTokens    AsanaToken[]
+  socialAccounts SocialAccount[]
   omnifocusSetup OmniFocusSetup?
 
   // Sync relationships
@@ -28,6 +40,24 @@ model User {
   syncLogs     SyncLog[]
 
   @@map("users")
+}
+
+model SocialAccount {
+  id           String      @id @default(cuid())
+  userId       String
+  provider     AuthProvider
+  providerId   String      // User ID from the provider
+  providerEmail String?    // Email from provider (might differ from user.email)
+  accessToken  String?
+  refreshToken String?
+  expiresAt    DateTime?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerId])
+  @@map("social_accounts")
 }
 
 model AsanaToken {
@@ -95,6 +125,22 @@ model SyncLog {
 enum UserPlan {
   FREE
   PRO
+  ENTERPRISE
+}
+
+enum SignupMethod {
+  EMAIL
+  ASANA
+  GOOGLE
+  GITHUB
+  MICROSOFT
+}
+
+enum AuthProvider {
+  ASANA
+  GOOGLE
+  GITHUB
+  MICROSOFT
 }
 
 enum SyncDirection {

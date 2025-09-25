@@ -9,10 +9,24 @@ const envSchema = zod_1.z.object({
     DATABASE_URL: zod_1.z.string().min(1),
     JWT_SECRET: zod_1.z.string().min(32),
     JWT_EXPIRES_IN: zod_1.z.string().default('7d'),
+    // URLs
+    FRONTEND_URL: zod_1.z.string().default('http://localhost:3000'),
+    BACKEND_URL: zod_1.z.string().default('http://localhost:3000'),
+    // Asana OAuth
     ASANA_CLIENT_ID: zod_1.z.string().optional(),
     ASANA_CLIENT_SECRET: zod_1.z.string().optional(),
     ASANA_REDIRECT_URI: zod_1.z.string().optional(),
-    FRONTEND_URL: zod_1.z.string().default('http://localhost:3000'),
+    // Google OAuth
+    GOOGLE_CLIENT_ID: zod_1.z.string().optional(),
+    GOOGLE_CLIENT_SECRET: zod_1.z.string().optional(),
+    // GitHub OAuth
+    GITHUB_CLIENT_ID: zod_1.z.string().optional(),
+    GITHUB_CLIENT_SECRET: zod_1.z.string().optional(),
+    // Microsoft OAuth
+    MICROSOFT_CLIENT_ID: zod_1.z.string().optional(),
+    MICROSOFT_CLIENT_SECRET: zod_1.z.string().optional(),
+    // Session secret for passport
+    SESSION_SECRET: zod_1.z.string().min(32).default('your-super-secret-session-key-change-this-in-production'),
 });
 let env;
 function loadEnv() {

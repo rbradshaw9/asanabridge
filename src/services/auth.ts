@@ -11,7 +11,7 @@ export interface JWTPayload {
 }
 
 export interface AuthenticatedRequest extends Request {
-  user?: JWTPayload;
+  user?: JWTPayload | any; // Allow both JWTPayload and User objects
 }
 
 export class AuthService {

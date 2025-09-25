@@ -6,10 +6,30 @@ const envSchema = z.object({
   DATABASE_URL: z.string().min(1),
   JWT_SECRET: z.string().min(32),
   JWT_EXPIRES_IN: z.string().default('7d'),
+  
+  // URLs
+  FRONTEND_URL: z.string().default('http://localhost:3000'),
+  BACKEND_URL: z.string().default('http://localhost:3000'),
+  
+  // Asana OAuth
   ASANA_CLIENT_ID: z.string().optional(),
   ASANA_CLIENT_SECRET: z.string().optional(),
   ASANA_REDIRECT_URI: z.string().optional(),
-  FRONTEND_URL: z.string().default('http://localhost:3000'),
+  
+  // Google OAuth
+  GOOGLE_CLIENT_ID: z.string().optional(),
+  GOOGLE_CLIENT_SECRET: z.string().optional(),
+  
+  // GitHub OAuth
+  GITHUB_CLIENT_ID: z.string().optional(),
+  GITHUB_CLIENT_SECRET: z.string().optional(),
+  
+  // Microsoft OAuth
+  MICROSOFT_CLIENT_ID: z.string().optional(),
+  MICROSOFT_CLIENT_SECRET: z.string().optional(),
+  
+  // Session secret for passport
+  SESSION_SECRET: z.string().min(32).default('your-super-secret-session-key-change-this-in-production'),
 });
 
 export type Env = z.infer<typeof envSchema>;

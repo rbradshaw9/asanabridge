@@ -7,9 +7,11 @@ const express_1 = __importDefault(require("express"));
 const cors_1 = __importDefault(require("cors"));
 const dotenv_1 = __importDefault(require("dotenv"));
 const path_1 = __importDefault(require("path"));
+const express_session_1 = __importDefault(require("express-session"));
 const env_1 = require("./config/env");
 const logger_1 = require("./config/logger");
 const database_1 = require("./config/database");
+// import { passport } from './config/passport'; // Temporarily disabled
 const oauth_1 = __importDefault(require("./routes/oauth"));
 const auth_1 = __importDefault(require("./routes/auth"));
 const agent_1 = __importDefault(require("./routes/agent"));
@@ -26,6 +28,20 @@ app.use((0, cors_1.default)({
     credentials: true
 }));
 app.use(express_1.default.json({ limit: '10mb' }));
+app.use(express_1.default.urlencoded({ extended: true }));
+// Session middleware for passport
+app.use((0, express_session_1.default)({
+    secret: env.SESSION_SECRET,
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+        secure: env.NODE_ENV === 'production',
+        maxAge: 24 * 60 * 60 * 1000 // 24 hours
+    }
+}));
+// Initialize passport - Temporarily disabled
+// app.use(passport.initialize());
+// app.use(passport.session());
 // Health check
 app.get('/health', async (_req, res) => {
     try {
