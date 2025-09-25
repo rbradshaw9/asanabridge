@@ -24,8 +24,27 @@ const env = (0, env_1.loadEnv)();
 const app = (0, express_1.default)();
 // Middleware
 app.use((0, cors_1.default)({
-    origin: env.FRONTEND_URL,
-    credentials: true
+    origin: (origin, callback) => {
+        // Allow requests with no origin (like mobile apps or curl requests)
+        if (!origin)
+            return callback(null, true);
+        const allowedOrigins = [
+            env.FRONTEND_URL,
+            'http://localhost:5173',
+            'https://localhost:5173',
+        ];
+        // Allow all subdomains of asanabridge.com
+        const asanabridgePattern = /^https?:\/\/([a-zA-Z0-9-]+\.)?asanabridge\.com$/;
+        if (allowedOrigins.includes(origin) || asanabridgePattern.test(origin)) {
+            callback(null, true);
+        }
+        else {
+            callback(new Error('Not allowed by CORS'));
+        }
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization']
 }));
 app.use(express_1.default.json({ limit: '10mb' }));
 app.use(express_1.default.urlencoded({ extended: true }));
