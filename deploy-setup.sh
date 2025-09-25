@@ -44,11 +44,20 @@ echo "📁 Creating application directory..."
 sudo mkdir -p /var/www/asanabridge
 sudo chown $USER:$USER /var/www/asanabridge
 
-# Clone repository
-echo "📥 Cloning repository..."
+# Clone or update repository
+echo "📥 Setting up repository..."
 cd /var/www
-git clone https://github.com/rbradshaw9/asanabridge.git
-cd asanabridge
+if [ -d "asanabridge" ]; then
+    echo "📥 Repository exists, updating..."
+    cd asanabridge
+    git fetch origin
+    git reset --hard origin/main
+    git pull origin main
+else
+    echo "📥 Cloning repository..."
+    git clone https://github.com/rbradshaw9/asanabridge.git
+    cd asanabridge
+fi
 
 # Install dependencies and build
 echo "📦 Installing dependencies..."
