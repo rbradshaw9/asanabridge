@@ -84,6 +84,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setToken(null);
     localStorage.removeItem('token');
     localStorage.removeItem('user');
+    // Use window.location.href instead of navigate to avoid routing issues
     window.location.href = '/auth';
   };
 

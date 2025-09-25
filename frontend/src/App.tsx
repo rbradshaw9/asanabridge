@@ -48,6 +48,10 @@ function App() {
             } 
           />
           <Route 
+            path="/login" 
+            element={<Navigate to="/auth" replace />}
+          />
+          <Route 
             path="/dashboard" 
             element={
               <ProtectedRoute>
