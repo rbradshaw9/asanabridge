@@ -793,15 +793,24 @@ const Dashboard: React.FC = () => {
                     return (
                       <div
                         key={project.gid}
-                        className={`p-4 rounded-lg border-2 transition-all ${
+                        className={`p-4 rounded-lg border-2 transition-all cursor-pointer ${
                           isAlreadySynced
-                            ? 'border-green-500 bg-green-500/10 cursor-default'
+                            ? 'border-green-500 bg-green-500/10 hover:border-red-500 hover:bg-red-500/10'
                             : isSelected
-                            ? 'border-blue-500 bg-blue-500/10 cursor-pointer'
-                            : 'border-slate-600 bg-slate-700/50 hover:border-slate-500 cursor-pointer'
+                            ? 'border-blue-500 bg-blue-500/10'
+                            : 'border-slate-600 bg-slate-700/50 hover:border-slate-500'
                         }`}
                         onClick={() => {
-                          if (isAlreadySynced) return;
+                          // Handle synced projects - allow unchecking with confirmation
+                          if (isAlreadySynced) {
+                            const mapping = syncMappings.find(m => m.asanaProjectId === project.gid);
+                            if (mapping) {
+                              if (confirm(`Are you sure you want to stop syncing "${project.name}"?\n\nThis will:\n• Remove the project from OmniFocus\n• Delete all synced tasks\n• Free up one sync slot\n\nThis action cannot be undone.`)) {
+                                handleDeleteSyncMapping(mapping.id, project.name);
+                              }
+                            }
+                            return;
+                          }
                           
                           const maxAllowed = planInfo ? (planInfo.isUnlimited ? Infinity : planInfo.maxProjects) : 2;
                           const availableSlots = maxAllowed - (planInfo?.currentProjects || 0);
@@ -829,30 +838,21 @@ const Dashboard: React.FC = () => {
                             <p className="text-gray-400 text-sm">{project.notes || 'No description'}</p>
                           </div>
                           <div className="flex items-center gap-2">
-                            {isAlreadySynced ? (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  const mapping = syncMappings.find(m => m.asanaProjectId === project.gid);
-                                  if (mapping) {
-                                    handleDeleteSyncMapping(mapping.id, project.name);
-                                  }
-                                }}
-                                className="px-3 py-1 bg-red-500/20 text-red-400 text-xs font-medium rounded hover:bg-red-500/30 transition-colors"
-                                disabled={loading}
-                              >
-                                Delete Sync
-                              </button>
-                            ) : (
-                              <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
-                                isSelected
-                                  ? 'border-blue-500 bg-blue-500'
-                                  : 'border-gray-400'
-                              }`}>
-                                {isSelected && (
-                                  <CheckCircle className="text-white" size={16} />
-                                )}
-                              </div>
+                            <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
+                              isAlreadySynced
+                                ? 'border-green-500 bg-green-500'
+                                : isSelected
+                                ? 'border-blue-500 bg-blue-500'
+                                : 'border-gray-400'
+                            }`}>
+                              {(isAlreadySynced || isSelected) && (
+                                <CheckCircle className="text-white" size={16} />
+                              )}
+                            </div>
+                            {isAlreadySynced && (
+                              <span className="text-xs text-gray-400">
+                                Click to unsync
+                              </span>
                             )}
                           </div>
                         </div>
