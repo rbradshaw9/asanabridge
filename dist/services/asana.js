@@ -40,7 +40,8 @@ class AsanaClient {
         }
     }
     async getCurrentUser() {
-        return this.makeRequest('/users/me');
+        const response = await this.makeRequest('/users/me');
+        return response.data;
     }
     async getWorkspaces() {
         const response = await this.makeRequest('/workspaces');

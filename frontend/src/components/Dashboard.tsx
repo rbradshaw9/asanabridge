@@ -37,18 +37,24 @@ const Dashboard: React.FC = () => {
   const checkAsanaStatus = async () => {
     try {
       const response = await authApi.getAsanaStatus();
+      console.log('Asana status response:', response.data);
       setAsanaConnected(response.data.connected);
       if (response.data.connected && response.data.user) {
+        console.log('Asana user:', response.data.user);
         setAsanaUser({ 
           name: response.data.user.name, 
           email: response.data.user.email 
         });
         // Load projects if connected
         loadAsanaProjects();
+      } else {
+        console.log('No Asana user data or not connected');
+        setAsanaUser(null);
       }
     } catch (err) {
-      console.log('Asana not connected');
+      console.log('Asana not connected:', err);
       setAsanaConnected(false);
+      setAsanaUser(null);
     }
   };
 
@@ -59,6 +65,14 @@ const Dashboard: React.FC = () => {
     } catch (err) {
       console.log('Failed to check agent status:', err);
     }
+  };
+
+  const handleDisconnectAsana = async () => {
+    // For now, just clear local state and refresh
+    setAsanaConnected(false);
+    setAsanaUser(null);
+    setAsanaProjects([]);
+    setSuccessMessage('Asana disconnected. You can reconnect anytime.');
   };
 
   const loadAsanaProjects = async () => {
@@ -308,6 +322,13 @@ const Dashboard: React.FC = () => {
                     title="Reconnect Asana"
                   >
                     <RefreshCw size={16} />
+                  </button>
+                  <button 
+                    onClick={handleDisconnectAsana}
+                    className="px-4 py-2 bg-red-600/80 hover:bg-red-600 text-white rounded-lg transition-colors"
+                    title="Disconnect Asana"
+                  >
+                    <XCircle size={16} />
                   </button>
                 </>
               )}

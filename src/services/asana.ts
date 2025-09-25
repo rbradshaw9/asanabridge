@@ -66,8 +66,11 @@ export class AsanaClient {
       });
       throw error;
     }
-  }  async getCurrentUser(): Promise<AsanaUser> {
-    return this.makeRequest<AsanaUser>('/users/me');
+  }
+
+  async getCurrentUser(): Promise<AsanaUser> {
+    const response = await this.makeRequest<{data: AsanaUser}>('/users/me');
+    return response.data;
   }
 
   async getWorkspaces(): Promise<any[]> {
