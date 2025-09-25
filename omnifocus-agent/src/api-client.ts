@@ -52,6 +52,12 @@ export class AsanaBridgeAPI {
     });
   }
 
+  // Get agent configuration based on user's plan
+  async getAgentConfig(): Promise<any> {
+    const response = await this.axios.get('/api/agent/config');
+    return response.data;
+  }
+
   // Get sync mappings for this user
   async getSyncMappings(): Promise<SyncMapping[]> {
     const response = await this.axios.get('/api/agent/mappings');

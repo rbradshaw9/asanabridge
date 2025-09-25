@@ -72,12 +72,13 @@ export class SetupWizard {
       }
     );
 
+    // Note: Sync interval will be determined by user's plan on the server
     const syncInterval = await this.askQuestion(
-      '⏱️  Sync interval in minutes (default: 5): ',
+      '⏱️  Sync interval in minutes (Free: 60, Pro: 5-60, default: 60): ',
       (input) => {
-        const interval = parseInt(input || '5');
-        if (isNaN(interval) || interval < 1 || interval > 60) {
-          return 'Please enter a number between 1 and 60';
+        const interval = parseInt(input || '60');
+        if (isNaN(interval) || interval < 5 || interval > 1440) {
+          return 'Please enter a number between 5 and 1440 (24 hours)';
         }
         return null;
       }
@@ -97,7 +98,7 @@ export class SetupWizard {
     return {
       agentKey,
       apiBaseUrl: apiBaseUrl || 'https://asanabridge.com',
-      syncInterval: syncInterval || '5',
+      syncInterval: syncInterval || '60',
       logLevel: logLevel || 'info'
     };
   }

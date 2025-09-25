@@ -34,12 +34,14 @@ const Dashboard: React.FC = () => {
     isUnlimited: boolean;
     canAddMore: boolean;
   } | null>(null);
+  const [syncMappings, setSyncMappings] = useState<any[]>([]);
 
   // Check Asana connection status on component mount
   useEffect(() => {
     checkAsanaStatus();
     checkAgentStatus();
     loadPlanInfo();
+    loadSyncMappings();
   }, []);
 
   const checkAsanaStatus = async () => {
@@ -85,6 +87,15 @@ const Dashboard: React.FC = () => {
       setPlanInfo(response.data);
     } catch (err) {
       console.log('Failed to load plan info:', err);
+    }
+  };
+
+  const loadSyncMappings = async () => {
+    try {
+      const response = await authApi.getSyncMappings();
+      setSyncMappings(response.data.mappings || []);
+    } catch (err) {
+      console.log('Failed to load sync mappings:', err);
     }
   };
 
@@ -161,8 +172,9 @@ const Dashboard: React.FC = () => {
       setShowProjectSelection(false);
       setSelectedProjects([]);
       
-      // Refresh plan info to show updated usage
+      // Refresh plan info and sync mappings to show updated usage
       loadPlanInfo();
+      loadSyncMappings();
       
       setTimeout(() => setSuccessMessage(''), 5000);
     } catch (err: any) {
@@ -173,6 +185,40 @@ const Dashboard: React.FC = () => {
       }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDownloadAgent = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      
+      // Create a temporary link with auth header via fetch and blob
+      const response = await fetch('/api/download/agent', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(await response.text());
+      }
+
+      // Create blob and download
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'AsanaBridge-Installer.dmg';
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+
+      setSuccessMessage('Agent download started!');
+      setTimeout(() => setSuccessMessage(''), 3000);
+    } catch (err: any) {
+      setError('Failed to download agent. Please try again.');
+      setTimeout(() => setError(''), 5000);
     }
   };
 
@@ -273,7 +319,7 @@ const Dashboard: React.FC = () => {
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-8">
           <div className="bg-white/10 backdrop-blur-md rounded-xl p-6 border border-white/20">
             <div className="flex items-center justify-between">
               <div>
@@ -290,8 +336,29 @@ const Dashboard: React.FC = () => {
               </div>
             </div>
             {planInfo && !planInfo.canAddMore && (
-              <div className="mt-3 px-3 py-2 bg-yellow-600/20 rounded-lg">
-                <p className="text-yellow-400 text-sm">Plan limit reached. Upgrade to Pro for unlimited projects.</p>
+              <div className="mt-3 px-3 py-2 bg-yellow-600/20 rounded-lg flex flex-col sm:flex-row sm:items-center gap-2">
+                <p className="text-yellow-400 text-sm flex-1">Plan limit reached.</p>
+                <button 
+                  onClick={() => window.open('/upgrade', '_blank')}
+                  className="px-3 py-1 bg-gradient-to-r from-blue-600 to-purple-600 text-white text-xs font-semibold rounded hover:from-blue-700 hover:to-purple-700 transition-all duration-200"
+                >
+                  Upgrade
+                </button>
+              </div>
+            )}
+            {planInfo && planInfo.plan === 'FREE' && planInfo.canAddMore && (
+              <div className="mt-3 px-3 py-2 bg-blue-600/20 rounded-lg">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                  <p className="text-blue-400 text-xs flex-1">
+                    📅 Free plan: Hourly sync • 🚀 Pro plan: Real-time sync (5min intervals)
+                  </p>
+                  <button 
+                    onClick={() => window.open('/upgrade', '_blank')}
+                    className="px-2 py-1 bg-gradient-to-r from-blue-600/50 to-purple-600/50 text-blue-200 text-xs font-medium rounded hover:from-blue-600 hover:to-purple-600 hover:text-white transition-all duration-200"
+                  >
+                    Upgrade
+                  </button>
+                </div>
               </div>
             )}
           </div>
@@ -312,7 +379,12 @@ const Dashboard: React.FC = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-gray-400 text-sm">Active Syncs</p>
-                <p className="text-2xl font-bold text-white">0</p>
+                <p className="text-2xl font-bold text-white">{syncMappings.length}</p>
+                {syncMappings.length > 0 && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    {syncMappings.map(m => m.asanaProjectName).join(', ')}
+                  </p>
+                )}
               </div>
               <div className="w-12 h-12 bg-purple-600/20 rounded-lg flex items-center justify-center">
                 <Activity className="text-purple-400" size={24} />
@@ -322,7 +394,7 @@ const Dashboard: React.FC = () => {
         </div>
 
         {/* Integration Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-8">
           {/* Asana Integration */}
           <div className="bg-white/10 backdrop-blur-md rounded-xl p-6 border border-white/20">
             <div className="flex items-center gap-4 mb-4">
@@ -503,7 +575,7 @@ const Dashboard: React.FC = () => {
               ) : (
                 <>
                   <button
-                    onClick={() => window.open('/api/download/agent', '_blank')}
+                    onClick={handleDownloadAgent}
                     className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition duration-200 flex items-center justify-center gap-2"
                   >
                     <Calendar size={16} />
@@ -552,16 +624,16 @@ const Dashboard: React.FC = () => {
 
       {/* Project Selection Modal */}
       {showProjectSelection && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-slate-800 rounded-xl max-w-2xl w-full max-h-[80vh] overflow-hidden">
-            <div className="p-6 border-b border-slate-700">
-              <div className="flex justify-between items-center">
-                <div>
-                  <h3 className="text-xl font-bold text-white">Select Asana Projects</h3>
-                  <p className="text-gray-400 text-sm mt-1">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-2 sm:p-4">
+          <div className="bg-slate-800 rounded-xl max-w-2xl w-full max-h-[90vh] sm:max-h-[80vh] overflow-hidden">
+            <div className="p-4 sm:p-6 border-b border-slate-700">
+              <div className="flex justify-between items-start gap-4">
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-lg sm:text-xl font-bold text-white">Select Asana Projects</h3>
+                  <p className="text-gray-400 text-xs sm:text-sm mt-1 break-words">
                     Choose up to {planInfo?.isUnlimited ? 'unlimited' : (planInfo?.maxProjects || 2)} projects to sync with OmniFocus
                     {planInfo && (
-                      <span className="ml-2 text-xs">
+                      <span className="block sm:inline sm:ml-2 text-xs">
                         ({planInfo.currentProjects} / {planInfo.isUnlimited ? '∞' : planInfo.maxProjects} used)
                       </span>
                     )}
@@ -569,14 +641,14 @@ const Dashboard: React.FC = () => {
                 </div>
                 <button
                   onClick={() => setShowProjectSelection(false)}
-                  className="text-gray-400 hover:text-white transition-colors"
+                  className="text-gray-400 hover:text-white transition-colors flex-shrink-0"
                 >
                   <XCircle size={24} />
                 </button>
               </div>
             </div>
 
-            <div className="p-6 max-h-96 overflow-y-auto">
+            <div className="p-4 sm:p-6 max-h-96 overflow-y-auto">
               {asanaProjects.length === 0 ? (
                 <div className="text-center py-8">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto mb-4"></div>
@@ -584,77 +656,108 @@ const Dashboard: React.FC = () => {
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {asanaProjects.map((project: any) => (
-                    <div
-                      key={project.gid}
-                      className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
-                        selectedProjects.includes(project.gid)
-                          ? 'border-blue-500 bg-blue-500/10'
-                          : 'border-slate-600 bg-slate-700/50 hover:border-slate-500'
-                      }`}
-                      onClick={() => {
-                        const isSelected = selectedProjects.includes(project.gid);
-                        const maxAllowed = planInfo ? (planInfo.isUnlimited ? Infinity : planInfo.maxProjects) : 2;
-                        const availableSlots = maxAllowed - (planInfo?.currentProjects || 0);
-                        
-                        if (isSelected) {
-                          setSelectedProjects(prev => prev.filter(id => id !== project.gid));
-                        } else if (selectedProjects.length < availableSlots) {
-                          setSelectedProjects(prev => [...prev, project.gid]);
-                        } else {
-                          setError(`You've reached your ${planInfo?.plan || 'FREE'} plan limit. Upgrade to Pro for unlimited projects.`);
-                          setTimeout(() => setError(''), 3000);
-                        }
-                      }}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h4 className="text-white font-semibold">{project.name}</h4>
-                          <p className="text-gray-400 text-sm">{project.notes || 'No description'}</p>
-                        </div>
-                        <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
-                          selectedProjects.includes(project.gid)
-                            ? 'border-blue-500 bg-blue-500'
-                            : 'border-gray-400'
-                        }`}>
-                          {selectedProjects.includes(project.gid) && (
-                            <CheckCircle className="text-white" size={16} />
-                          )}
+                  {asanaProjects.map((project: any) => {
+                    const isAlreadySynced = syncMappings.some(m => m.asanaProjectId === project.gid);
+                    const isSelected = selectedProjects.includes(project.gid);
+                    
+                    return (
+                      <div
+                        key={project.gid}
+                        className={`p-4 rounded-lg border-2 transition-all ${
+                          isAlreadySynced
+                            ? 'border-green-500 bg-green-500/10 cursor-default'
+                            : isSelected
+                            ? 'border-blue-500 bg-blue-500/10 cursor-pointer'
+                            : 'border-slate-600 bg-slate-700/50 hover:border-slate-500 cursor-pointer'
+                        }`}
+                        onClick={() => {
+                          if (isAlreadySynced) return;
+                          
+                          const maxAllowed = planInfo ? (planInfo.isUnlimited ? Infinity : planInfo.maxProjects) : 2;
+                          const availableSlots = maxAllowed - (planInfo?.currentProjects || 0);
+                          
+                          if (isSelected) {
+                            setSelectedProjects(prev => prev.filter(id => id !== project.gid));
+                          } else if (selectedProjects.length < availableSlots) {
+                            setSelectedProjects(prev => [...prev, project.gid]);
+                          } else {
+                            setError(`You've reached your ${planInfo?.plan || 'FREE'} plan limit. Upgrade to Pro for unlimited projects.`);
+                            setTimeout(() => setError(''), 3000);
+                          }
+                        }}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h4 className="text-white font-semibold">{project.name}</h4>
+                              {isAlreadySynced && (
+                                <span className="px-2 py-1 bg-green-500/20 text-green-400 text-xs rounded">
+                                  Synced
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-gray-400 text-sm">{project.notes || 'No description'}</p>
+                          </div>
+                          <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
+                            isAlreadySynced
+                              ? 'border-green-500 bg-green-500'
+                              : isSelected
+                              ? 'border-blue-500 bg-blue-500'
+                              : 'border-gray-400'
+                          }`}>
+                            {(isAlreadySynced || isSelected) && (
+                              <CheckCircle className="text-white" size={16} />
+                            )}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
               
               {planInfo && !planInfo.isUnlimited && (planInfo.currentProjects + selectedProjects.length) >= planInfo.maxProjects && (
-                <div className="mt-4 p-3 bg-amber-500/20 border border-amber-500/50 rounded-lg">
-                  <p className="text-amber-200 text-sm">
-                    🎯 {planInfo.plan} accounts can sync up to {planInfo.maxProjects} projects. <a href="#" className="underline">Upgrade to Pro</a> for unlimited projects.
-                  </p>
+                <div className="mt-4 p-4 bg-gradient-to-r from-amber-500/20 to-orange-500/20 border border-amber-500/50 rounded-lg">
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                    <div className="flex-1">
+                      <p className="text-amber-200 text-sm">
+                        🎯 {planInfo.plan} accounts can sync up to {planInfo.maxProjects} projects.
+                      </p>
+                    </div>
+                    <button 
+                      onClick={() => window.open('/upgrade', '_blank')}
+                      className="px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white text-sm font-semibold rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all duration-200 transform hover:scale-105 shadow-lg"
+                    >
+                      Upgrade to Pro
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
 
-            <div className="p-6 border-t border-slate-700 flex gap-3">
+            <div className="p-4 sm:p-6 border-t border-slate-700 flex flex-col sm:flex-row gap-3">
               <button
                 onClick={() => setShowProjectSelection(false)}
-                className="flex-1 px-4 py-2 bg-slate-600 text-white rounded-lg hover:bg-slate-500 transition-colors"
+                className="flex-1 px-4 py-2 bg-slate-600 text-white rounded-lg hover:bg-slate-500 transition-colors order-2 sm:order-1"
               >
                 Cancel
               </button>
               <button
                 onClick={handleCreateSyncMappings}
                 disabled={selectedProjects.length === 0 || loading}
-                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2 order-1 sm:order-2"
               >
                 {loading ? (
                   <>
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                    Setting up...
+                    <span className="hidden sm:inline">Setting up...</span>
+                    <span className="sm:hidden">Setup...</span>
                   </>
                 ) : (
-                  `Set Up Sync (${selectedProjects.length} projects)`
+                  <>
+                    <span className="hidden sm:inline">{`Set Up Sync (${selectedProjects.length} projects)`}</span>
+                    <span className="sm:hidden">{`Setup (${selectedProjects.length})`}</span>
+                  </>
                 )}
               </button>
             </div>

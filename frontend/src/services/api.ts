@@ -118,7 +118,10 @@ export const authApi = {
     api.get<PlanInfoResponse>('/sync/plan'),
   
   createSyncMapping: (asanaProjectId: string, asanaProjectName: string, omnifocusProjectName: string) =>
-    api.post('/sync/mapping', { asanaProjectId, asanaProjectName, omnifocusProjectName }),
+    api.post('/sync/mappings', { asanaProjectId, asanaProjectName, omnifocusProjectName }),
+  
+  getSyncMappings: () =>
+    api.get<{ mappings: any[] }>('/sync/mappings'),
   
   health: () =>
     api.get('/health'),

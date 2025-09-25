@@ -60,14 +60,26 @@ class AsanaBridgeAgent {
       await this.api.registerAgent(ofVersion);
       console.log('✅ Registered with AsanaBridge web service');
 
+      // Get plan-based configuration
+      const serverConfig = await this.api.getAgentConfig();
+      console.log(`📋 Plan: ${serverConfig.plan} - Min sync: ${serverConfig.minSyncIntervalMinutes}min`);
+
+      // Validate and adjust sync interval based on plan
+      let syncInterval = parseInt(this.config.SYNC_INTERVAL_MINUTES);
+      if (syncInterval < serverConfig.minSyncIntervalMinutes) {
+        syncInterval = serverConfig.minSyncIntervalMinutes;
+        console.log(`⚠️  Sync interval adjusted to ${syncInterval} minutes (plan minimum)`);
+      }
+      this.config.SYNC_INTERVAL_MINUTES = syncInterval.toString();
+
       // Start local HTTP server for health checks
       this.startLocalServer();
 
-      // Schedule periodic sync
+      // Schedule periodic sync with plan-adjusted interval
       this.scheduleSync();
 
       this.isRunning = true;
-      console.log(`✅ Agent running - sync every ${this.config.SYNC_INTERVAL_MINUTES} minutes`);
+      console.log(`✅ Agent running - sync every ${syncInterval} minutes (${serverConfig.plan} plan)`);
 
       // Initial sync
       await this.performSync();

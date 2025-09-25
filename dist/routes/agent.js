@@ -66,6 +66,63 @@ router.post('/register', authenticateAgent, async (req, res) => {
         res.status(500).json({ error: 'Registration failed' });
     }
 });
+// Get agent configuration based on user's plan
+router.get('/config', authenticateAgent, async (req, res) => {
+    try {
+        const setup = req.agentSetup;
+        // Get user with plan information
+        const user = await database_1.prisma.user.findUnique({
+            where: { id: setup.userId },
+            select: { plan: true }
+        });
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+        // Define plan-based configuration
+        const planConfig = {
+            FREE: {
+                minSyncIntervalMinutes: 60, // Hourly for free users
+                maxSyncIntervalMinutes: 1440, // Daily max
+                recommendedSyncIntervalMinutes: 60,
+                features: {
+                    realTimeSync: false,
+                    advancedFiltering: false,
+                    prioritySupport: false
+                }
+            },
+            PRO: {
+                minSyncIntervalMinutes: 5, // Real-time for pro users
+                maxSyncIntervalMinutes: 1440,
+                recommendedSyncIntervalMinutes: 15,
+                features: {
+                    realTimeSync: true,
+                    advancedFiltering: true,
+                    prioritySupport: false
+                }
+            },
+            ENTERPRISE: {
+                minSyncIntervalMinutes: 1, // Most frequent for enterprise
+                maxSyncIntervalMinutes: 1440,
+                recommendedSyncIntervalMinutes: 5,
+                features: {
+                    realTimeSync: true,
+                    advancedFiltering: true,
+                    prioritySupport: true
+                }
+            }
+        };
+        const config = planConfig[user.plan] || planConfig.FREE;
+        res.json({
+            plan: user.plan,
+            ...config,
+            serverTime: new Date().toISOString()
+        });
+    }
+    catch (error) {
+        logger_1.logger.error('Failed to get agent config', error);
+        res.status(500).json({ error: 'Failed to get configuration' });
+    }
+});
 // Get sync mappings for this user
 router.get('/mappings', authenticateAgent, async (req, res) => {
     try {
