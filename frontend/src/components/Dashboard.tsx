@@ -192,6 +192,16 @@ const Dashboard: React.FC = () => {
     try {
       const token = localStorage.getItem('token');
       
+      if (!token) {
+        setError('Authentication required. Please log in again.');
+        setTimeout(() => setError(''), 5000);
+        return;
+      }
+      
+      setLoading(true);
+      setError('');
+      setSuccessMessage('');
+      
       // Create a temporary link with auth header via fetch and blob
       const response = await fetch('/api/download/agent', {
         headers: {
@@ -200,7 +210,27 @@ const Dashboard: React.FC = () => {
       });
 
       if (!response.ok) {
-        throw new Error(await response.text());
+        const errorText = await response.text();
+        let errorMessage = 'Failed to download agent. Please try again.';
+        
+        try {
+          const errorData = JSON.parse(errorText);
+          if (errorData.message) {
+            errorMessage = errorData.message;
+          } else if (errorData.error) {
+            errorMessage = errorData.error;
+          }
+        } catch {
+          // Use default error message if JSON parsing fails
+        }
+        
+        if (response.status === 404) {
+          errorMessage = 'Agent installer is being prepared. Please try again in a few minutes.';
+        } else if (response.status === 401) {
+          errorMessage = 'Authentication expired. Please refresh the page and try again.';
+        }
+        
+        throw new Error(errorMessage);
       }
 
       // Create blob and download
@@ -214,11 +244,14 @@ const Dashboard: React.FC = () => {
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
 
-      setSuccessMessage('Agent download started!');
-      setTimeout(() => setSuccessMessage(''), 3000);
+      setSuccessMessage('✅ Agent download started! Check your Downloads folder.');
+      setTimeout(() => setSuccessMessage(''), 5000);
     } catch (err: any) {
-      setError('Failed to download agent. Please try again.');
+      console.error('Download error:', err);
+      setError(err.message || 'Failed to download agent. Please try again.');
       setTimeout(() => setError(''), 5000);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -307,6 +340,23 @@ const Dashboard: React.FC = () => {
         </div>
       </header>
 
+      {/* Simple Notifications */}
+      {error && (
+        <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 max-w-md w-full mx-4">
+          <div className="bg-red-500/90 backdrop-blur-sm text-white px-4 py-3 rounded-lg shadow-lg">
+            <p className="text-sm">{error}</p>
+          </div>
+        </div>
+      )}
+      
+      {successMessage && (
+        <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 max-w-md w-full mx-4">
+          <div className="bg-green-500/90 backdrop-blur-sm text-white px-4 py-3 rounded-lg shadow-lg">
+            <p className="text-sm">{successMessage}</p>
+          </div>
+        </div>
+      )}
+
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Welcome Section */}
         <div className="mb-8">
@@ -339,7 +389,7 @@ const Dashboard: React.FC = () => {
               <div className="mt-3 px-3 py-2 bg-yellow-600/20 rounded-lg flex flex-col sm:flex-row sm:items-center gap-2">
                 <p className="text-yellow-400 text-sm flex-1">Plan limit reached.</p>
                 <button 
-                  onClick={() => window.open('/upgrade', '_blank')}
+                  onClick={() => window.open('/account', '_blank')}
                   className="px-3 py-1 bg-gradient-to-r from-blue-600 to-purple-600 text-white text-xs font-semibold rounded hover:from-blue-700 hover:to-purple-700 transition-all duration-200"
                 >
                   Upgrade
@@ -353,7 +403,7 @@ const Dashboard: React.FC = () => {
                     📅 Free plan: Hourly sync • 🚀 Pro plan: Real-time sync (5min intervals)
                   </p>
                   <button 
-                    onClick={() => window.open('/upgrade', '_blank')}
+                    onClick={() => window.open('/account', '_blank')}
                     className="px-2 py-1 bg-gradient-to-r from-blue-600/50 to-purple-600/50 text-blue-200 text-xs font-medium rounded hover:from-blue-600 hover:to-purple-600 hover:text-white transition-all duration-200"
                   >
                     Upgrade
@@ -725,7 +775,7 @@ const Dashboard: React.FC = () => {
                       </p>
                     </div>
                     <button 
-                      onClick={() => window.open('/upgrade', '_blank')}
+                      onClick={() => window.open('/account', '_blank')}
                       className="px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white text-sm font-semibold rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all duration-200 transform hover:scale-105 shadow-lg"
                     >
                       Upgrade to Pro

@@ -4,7 +4,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import LandingPage from './components/LandingPage';
 import LoginPage from './components/LoginPage';
 import Dashboard from './components/Dashboard';
-import UpgradePage from './components/UpgradePage';
+import AccountSettingsPage from './components/AccountSettingsPage';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, loading } = useAuth();
@@ -61,10 +61,10 @@ function App() {
             } 
           />
           <Route 
-            path="/upgrade" 
+            path="/account" 
             element={
               <ProtectedRoute>
-                <UpgradePage />
+                <AccountSettingsPage />
               </ProtectedRoute>
             } 
           />
