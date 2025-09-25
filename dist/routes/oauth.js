@@ -143,6 +143,59 @@ router.delete('/asana/disconnect', auth_1.authenticateToken, async (req, res) =>
     }
 });
 // Get Asana projects
+// Debug endpoint to test basic Asana API access
+router.get('/asana/debug', auth_1.authenticateToken, async (req, res) => {
+    try {
+        const userId = req.user.userId;
+        const accessToken = await asana_oauth_1.AsanaOAuth.getValidTokenForUser(userId);
+        if (!accessToken) {
+            return res.status(401).json({ error: 'Asana not connected' });
+        }
+        logger_1.logger.info('Debug: Testing Asana API access', { userId });
+        // Test multiple endpoints to see what works
+        const asanaClient = new asana_1.AsanaClient(accessToken);
+        const results = {};
+        try {
+            results.user = await asanaClient.getCurrentUser();
+            logger_1.logger.info('Debug: User fetch successful', { user: results.user });
+        }
+        catch (err) {
+            results.userError = err.message;
+            logger_1.logger.error('Debug: User fetch failed', err);
+        }
+        try {
+            results.workspaces = await asanaClient.getWorkspaces();
+            logger_1.logger.info('Debug: Workspaces fetch successful', { count: results.workspaces?.length });
+        }
+        catch (err) {
+            results.workspacesError = err.message;
+            logger_1.logger.error('Debug: Workspaces fetch failed', err);
+        }
+        try {
+            // Get projects from first available workspace
+            if (results.workspaces && results.workspaces.length > 0) {
+                const firstWorkspace = results.workspaces[0];
+                const projects = await asanaClient.getProjects(firstWorkspace.gid);
+                results.projects = projects;
+                results.projectCount = projects?.length || 0;
+                logger_1.logger.info('Debug: Projects fetch successful', { count: projects?.length, workspace: firstWorkspace.name });
+            }
+            else {
+                results.projectsError = 'No workspaces available';
+                logger_1.logger.warn('Debug: No workspaces available for projects fetch');
+            }
+        }
+        catch (err) {
+            results.projectsError = err.message;
+            logger_1.logger.error('Debug: Projects fetch failed', err);
+        }
+        res.json({ debug: results, accessToken: accessToken ? 'present' : 'missing' });
+    }
+    catch (error) {
+        logger_1.logger.error('Debug endpoint error', error);
+        res.status(500).json({ error: 'Debug failed', details: error.message });
+    }
+});
 // Get workspaces
 router.get('/asana/workspaces', auth_1.authenticateToken, async (req, res) => {
     try {
@@ -168,13 +221,24 @@ router.get('/asana/projects', auth_1.authenticateToken, async (req, res) => {
         if (!accessToken) {
             return res.status(401).json({ error: 'Asana not connected' });
         }
-        logger_1.logger.info('Fetching Asana projects', { userId, workspace });
         const asanaClient = new asana_1.AsanaClient(accessToken);
-        const projects = await asanaClient.getProjects(workspace);
+        // If no workspace specified, get the first workspace
+        let workspaceGid = workspace;
+        if (!workspaceGid) {
+            logger_1.logger.info('No workspace specified, fetching workspaces first', { userId });
+            const workspaces = await asanaClient.getWorkspaces();
+            if (workspaces.length === 0) {
+                return res.status(404).json({ error: 'No workspaces found' });
+            }
+            workspaceGid = workspaces[0].gid;
+            logger_1.logger.info('Using first workspace', { userId, workspaceGid, workspaceName: workspaces[0].name });
+        }
+        logger_1.logger.info('Fetching Asana projects', { userId, workspace: workspaceGid });
+        const projects = await asanaClient.getProjects(workspaceGid);
         logger_1.logger.info('Asana projects fetched successfully', {
             userId,
             projectCount: projects.length,
-            workspace
+            workspace: workspaceGid
         });
         res.json({ projects });
     }

@@ -48,10 +48,10 @@ class AsanaClient {
         return response.data || [];
     }
     async getProjects(workspaceGid) {
-        let endpoint = '/projects?limit=100&archived=false&opt_fields=gid,name,notes,archived,public,created_at,modified_at,workspace';
-        if (workspaceGid) {
-            endpoint += `&workspace=${workspaceGid}`;
+        if (!workspaceGid) {
+            throw new Error('Workspace GID is required for fetching projects');
         }
+        const endpoint = `/projects?workspace=${workspaceGid}&limit=100&archived=false&opt_fields=gid,name,notes,archived,public,created_at,modified_at`;
         const response = await this.makeRequest(endpoint);
         return response.data || [];
     }
