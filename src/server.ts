@@ -6,6 +6,11 @@ import { loadEnv } from './config/env';
 import { logger } from './config/logger';
 import { prisma } from './config/database';
 import oauthRoutes from './routes/oauth';
+import authRoutes from './routes/auth';
+import agentRoutes from './routes/agent';
+import syncRoutes from './routes/sync';
+import downloadRoutes from './routes/download';
+import deployInfoRoutes from './routes/deploy-info';
 
 // Load environment variables first
 dotenv.config();
@@ -50,15 +55,10 @@ app.get('/', (_req, res) => {
 
 // API Routes
 app.use('/api/oauth', oauthRoutes);
-import authRoutes from './routes/auth';
 app.use('/api/auth', authRoutes);
-import agentRoutes from './routes/agent';
 app.use('/api/agent', agentRoutes);
-import syncRoutes from './routes/sync';
 app.use('/api/sync', syncRoutes);
-import downloadRoutes from './routes/download';
 app.use('/api/download', downloadRoutes);
-import deployInfoRoutes from './routes/deploy-info';
 app.use('/api/deploy', deployInfoRoutes);
 
 // Basic API routes (will expand these)
