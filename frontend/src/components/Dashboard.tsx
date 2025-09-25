@@ -12,16 +12,17 @@ import {
   RefreshCw,
   Activity,
   Calendar,
-  Zap
+  Zap,
+  CreditCard
 } from 'lucide-react';
 
 // User Menu Component
 const UserMenu: React.FC<{
   user: any;
   onLogout: () => void;
-  onAccountSettings: () => void;
-}> = ({ user, onLogout, onAccountSettings }) => {
+}> = ({ user, onLogout }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const navigate = useNavigate();
 
   return (
     <div className="relative">
@@ -47,13 +48,23 @@ const UserMenu: React.FC<{
               </div>
               <button
                 onClick={() => {
-                  onAccountSettings();
+                  navigate('/account-settings?tab=profile');
                   setIsOpen(false);
                 }}
                 className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:text-white hover:bg-white/10 transition-colors flex items-center gap-2"
               >
-                <Settings size={16} />
-                Account Settings
+                <User size={16} />
+                Profile
+              </button>
+              <button
+                onClick={() => {
+                  navigate('/account-settings?tab=billing');
+                  setIsOpen(false);
+                }}
+                className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:text-white hover:bg-white/10 transition-colors flex items-center gap-2"
+              >
+                <CreditCard size={16} />
+                Billing
               </button>
               <button
                 onClick={() => {
@@ -386,14 +397,14 @@ const Dashboard: React.FC = () => {
             <div className="flex items-center gap-4">
               {planInfo?.plan === 'FREE' && (
                 <button
-                  onClick={() => navigate('/account')}
+                  onClick={() => navigate('/account-settings?tab=billing')}
                   className="px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white text-sm font-semibold rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all duration-200"
                 >
                   Upgrade to Pro
                 </button>
               )}
               
-              <UserMenu user={user} onLogout={logout} onAccountSettings={() => navigate('/account')} />
+              <UserMenu user={user} onLogout={logout} />
             </div>
           </div>
         </div>
@@ -447,8 +458,8 @@ const Dashboard: React.FC = () => {
             {planInfo && !planInfo.canAddMore && (
               <div className="mt-3 px-3 py-2 bg-yellow-600/20 rounded-lg flex flex-col sm:flex-row sm:items-center gap-2">
                 <p className="text-yellow-400 text-sm flex-1">Plan limit reached.</p>
-                <button 
-                  onClick={() => navigate('/account')}
+                <button
+                  onClick={() => navigate('/account-settings?tab=billing')}
                   className="px-3 py-1 bg-gradient-to-r from-blue-600 to-purple-600 text-white text-xs font-semibold rounded hover:from-blue-700 hover:to-purple-700 transition-all duration-200"
                 >
                   Upgrade
@@ -461,8 +472,8 @@ const Dashboard: React.FC = () => {
                   <p className="text-blue-400 text-xs flex-1">
                     📅 Free plan: Hourly sync • 🚀 Pro plan: Real-time sync (5min intervals)
                   </p>
-                  <button 
-                    onClick={() => navigate('/account')}
+                  <button
+                    onClick={() => navigate('/account-settings?tab=billing')}
                     className="px-2 py-1 bg-gradient-to-r from-blue-600/50 to-purple-600/50 text-blue-200 text-xs font-medium rounded hover:from-blue-600 hover:to-purple-600 hover:text-white transition-all duration-200"
                   >
                     Upgrade
@@ -817,8 +828,8 @@ const Dashboard: React.FC = () => {
                         🎯 {planInfo.plan} accounts can sync up to {planInfo.maxProjects} projects.
                       </p>
                     </div>
-                    <button 
-                      onClick={() => navigate('/account')}
+                    <button
+                      onClick={() => navigate('/account-settings?tab=billing')}
                       className="px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white text-sm font-semibold rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all duration-200 transform hover:scale-105 shadow-lg"
                     >
                       Upgrade to Pro

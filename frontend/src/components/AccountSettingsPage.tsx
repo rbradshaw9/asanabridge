@@ -13,11 +13,12 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { authApi } from '../services/api';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 
 const AccountSettingsPage: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [activeTab, setActiveTab] = useState('profile');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -41,7 +42,14 @@ const AccountSettingsPage: React.FC = () => {
 
   useEffect(() => {
     loadPlanInfo();
-  }, []);
+    
+    // Handle URL tab parameter
+    const params = new URLSearchParams(location.search);
+    const tab = params.get('tab');
+    if (tab && ['profile', 'security', 'billing'].includes(tab)) {
+      setActiveTab(tab);
+    }
+  }, [location.search]);
 
   const loadPlanInfo = async () => {
     try {
