@@ -11,6 +11,11 @@ const env_1 = require("./config/env");
 const logger_1 = require("./config/logger");
 const database_1 = require("./config/database");
 const oauth_1 = __importDefault(require("./routes/oauth"));
+const auth_1 = __importDefault(require("./routes/auth"));
+const agent_1 = __importDefault(require("./routes/agent"));
+const sync_1 = __importDefault(require("./routes/sync"));
+const download_1 = __importDefault(require("./routes/download"));
+const deploy_info_1 = __importDefault(require("./routes/deploy-info"));
 // Load environment variables first
 dotenv_1.default.config();
 const env = (0, env_1.loadEnv)();
@@ -26,10 +31,21 @@ app.get('/health', async (_req, res) => {
     try {
         // Check database connection
         await database_1.prisma.$queryRaw `SELECT 1`;
+        // Get git commit info for deployment verification
+        let gitCommit = 'unknown';
+        try {
+            const { execSync } = require('child_process');
+            gitCommit = execSync('git rev-parse HEAD', { encoding: 'utf8', cwd: process.cwd() }).trim().substring(0, 8);
+        }
+        catch (error) {
+            // Git info not available
+        }
         res.json({
             status: 'ok',
             timestamp: new Date().toISOString(),
-            database: 'connected'
+            database: 'connected',
+            commit: gitCommit,
+            deploymentTest: 'NEW_CODE_MARKER_v2'
         });
     }
     catch (error) {
@@ -49,15 +65,10 @@ app.get('/', (_req, res) => {
 });
 // API Routes
 app.use('/api/oauth', oauth_1.default);
-const auth_1 = __importDefault(require("./routes/auth"));
 app.use('/api/auth', auth_1.default);
-const agent_1 = __importDefault(require("./routes/agent"));
 app.use('/api/agent', agent_1.default);
-const sync_1 = __importDefault(require("./routes/sync"));
 app.use('/api/sync', sync_1.default);
-const download_1 = __importDefault(require("./routes/download"));
 app.use('/api/download', download_1.default);
-const deploy_info_1 = __importDefault(require("./routes/deploy-info"));
 app.use('/api/deploy', deploy_info_1.default);
 // Basic API routes (will expand these)
 app.get('/api/status', (_req, res) => {

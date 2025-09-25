@@ -30,10 +30,22 @@ app.get('/health', async (_req, res) => {
   try {
     // Check database connection
     await prisma.$queryRaw`SELECT 1`;
+    
+    // Get git commit info for deployment verification
+    let gitCommit = 'unknown';
+    try {
+      const { execSync } = require('child_process');
+      gitCommit = execSync('git rev-parse HEAD', { encoding: 'utf8', cwd: process.cwd() }).trim().substring(0, 8);
+    } catch (error) {
+      // Git info not available
+    }
+    
     res.json({ 
       status: 'ok', 
       timestamp: new Date().toISOString(),
-      database: 'connected'
+      database: 'connected',
+      commit: gitCommit,
+      deploymentTest: 'NEW_CODE_MARKER_v2'
     });
   } catch (error) {
     logger.error('Health check failed', error);
