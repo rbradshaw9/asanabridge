@@ -48,19 +48,25 @@ export class AsanaClient {
         },
         ...options
       });
-      
-      return response.data.data;
+
+      // Log the full response for debugging
+      logger.info('Asana API response', {
+        endpoint,
+        status: response.status,
+        dataKeys: Object.keys(response.data || {})
+      });
+
+      return response.data;
     } catch (error: any) {
       logger.error('Asana API error', {
         endpoint,
         status: error.response?.status,
-        message: error.response?.data?.errors?.[0]?.message || error.message
+        message: error.response?.data?.errors || error.message,
+        responseData: error.response?.data
       });
-      throw new Error(`Asana API error: ${error.response?.data?.errors?.[0]?.message || error.message}`);
+      throw error;
     }
-  }
-
-  async getCurrentUser(): Promise<AsanaUser> {
+  }  async getCurrentUser(): Promise<AsanaUser> {
     return this.makeRequest<AsanaUser>('/users/me');
   }
 
@@ -70,11 +76,11 @@ export class AsanaClient {
   }
 
   async getProjects(workspaceGid?: string): Promise<AsanaProject[]> {
-    let endpoint = '/projects?limit=100&archived=false';
+    let endpoint = '/projects?limit=100&archived=false&opt_fields=gid,name,notes,archived,public,created_at,modified_at,workspace';
     if (workspaceGid) {
       endpoint += `&workspace=${workspaceGid}`;
     }
-    const response = await this.makeRequest<{data: AsanaProject[]}>('/projects?limit=100&archived=false&opt_fields=gid,name,notes,archived,public,created_at,modified_at,workspace');
+    const response = await this.makeRequest<{data: AsanaProject[]}>(endpoint);
     return response.data || [];
   }
 

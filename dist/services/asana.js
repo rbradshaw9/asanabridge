@@ -21,22 +21,38 @@ class AsanaClient {
                 },
                 ...options
             });
-            return response.data.data;
+            // Log the full response for debugging
+            logger_1.logger.info('Asana API response', {
+                endpoint,
+                status: response.status,
+                dataKeys: Object.keys(response.data || {})
+            });
+            return response.data;
         }
         catch (error) {
             logger_1.logger.error('Asana API error', {
                 endpoint,
                 status: error.response?.status,
-                message: error.response?.data?.errors?.[0]?.message || error.message
+                message: error.response?.data?.errors || error.message,
+                responseData: error.response?.data
             });
-            throw new Error(`Asana API error: ${error.response?.data?.errors?.[0]?.message || error.message}`);
+            throw error;
         }
     }
     async getCurrentUser() {
         return this.makeRequest('/users/me');
     }
-    async getProjects() {
-        return this.makeRequest('/projects?limit=100&archived=false');
+    async getWorkspaces() {
+        const response = await this.makeRequest('/workspaces');
+        return response.data || [];
+    }
+    async getProjects(workspaceGid) {
+        let endpoint = '/projects?limit=100&archived=false&opt_fields=gid,name,notes,archived,public,created_at,modified_at,workspace';
+        if (workspaceGid) {
+            endpoint += `&workspace=${workspaceGid}`;
+        }
+        const response = await this.makeRequest(endpoint);
+        return response.data || [];
     }
     async getProject(projectGid) {
         return this.makeRequest(`/projects/${projectGid}`);

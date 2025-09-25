@@ -187,13 +187,28 @@ router.get('/asana/projects', authenticateToken, async (req: AuthenticatedReques
       return res.status(401).json({ error: 'Asana not connected' });
     }
 
+    logger.info('Fetching Asana projects', { userId, workspace });
     const asanaClient = new AsanaClient(accessToken);
     const projects = await asanaClient.getProjects(workspace as string);
 
+    logger.info('Asana projects fetched successfully', { 
+      userId, 
+      projectCount: projects.length,
+      workspace 
+    });
+
     res.json({ projects });
-  } catch (error) {
-    logger.error('Error fetching Asana projects', error);
-    res.status(500).json({ error: 'Failed to fetch projects' });
+  } catch (error: any) {
+    logger.error('Error fetching Asana projects', { 
+      error: error.message,
+      stack: error.stack,
+      userId: req.user!.userId,
+      workspace: req.query.workspace
+    });
+    res.status(500).json({ 
+      error: 'Failed to fetch projects',
+      details: error.message 
+    });
   }
 });
 
