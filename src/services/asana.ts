@@ -64,8 +64,18 @@ export class AsanaClient {
     return this.makeRequest<AsanaUser>('/users/me');
   }
 
-  async getProjects(): Promise<AsanaProject[]> {
-    return this.makeRequest<AsanaProject[]>('/projects?limit=100&archived=false');
+  async getWorkspaces(): Promise<any[]> {
+    const response = await this.makeRequest<{data: any[]}>('/workspaces');
+    return response.data || [];
+  }
+
+  async getProjects(workspaceGid?: string): Promise<AsanaProject[]> {
+    let endpoint = '/projects?limit=100&archived=false';
+    if (workspaceGid) {
+      endpoint += `&workspace=${workspaceGid}`;
+    }
+    const response = await this.makeRequest<{data: AsanaProject[]}>('/projects?limit=100&archived=false&opt_fields=gid,name,notes,archived,public,created_at,modified_at,workspace');
+    return response.data || [];
   }
 
   async getProject(projectGid: string): Promise<AsanaProject> {

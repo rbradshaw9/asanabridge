@@ -157,7 +157,8 @@ router.delete('/asana/disconnect', authenticateToken, async (req: AuthenticatedR
 });
 
 // Get Asana projects
-router.get('/asana/projects', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+// Get workspaces
+router.get('/asana/workspaces', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.user!.userId;
     const accessToken = await AsanaOAuth.getValidTokenForUser(userId);
@@ -167,7 +168,27 @@ router.get('/asana/projects', authenticateToken, async (req: AuthenticatedReques
     }
 
     const asanaClient = new AsanaClient(accessToken);
-    const projects = await asanaClient.getProjects();
+    const workspaces = await asanaClient.getWorkspaces();
+
+    res.json({ workspaces });
+  } catch (error) {
+    logger.error('Error fetching Asana workspaces', error);
+    res.status(500).json({ error: 'Failed to fetch workspaces' });
+  }
+});
+
+router.get('/asana/projects', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const userId = req.user!.userId;
+    const { workspace } = req.query;
+    const accessToken = await AsanaOAuth.getValidTokenForUser(userId);
+    
+    if (!accessToken) {
+      return res.status(401).json({ error: 'Asana not connected' });
+    }
+
+    const asanaClient = new AsanaClient(accessToken);
+    const projects = await asanaClient.getProjects(workspace as string);
 
     res.json({ projects });
   } catch (error) {

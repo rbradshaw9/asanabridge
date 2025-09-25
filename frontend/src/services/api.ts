@@ -89,8 +89,11 @@ export const authApi = {
   getAsanaStatus: () =>
     api.get<AsanaStatusResponse>('/oauth/asana/status'),
   
-  getAsanaProjects: () =>
-    api.get<{ projects: any[] }>('/oauth/asana/projects'),
+  getAsanaWorkspaces: () =>
+    api.get<{ workspaces: any[] }>('/oauth/asana/workspaces'),
+
+  getAsanaProjects: (workspaceGid?: string) =>
+    api.get<{ projects: any[] }>(`/oauth/asana/projects${workspaceGid ? `?workspace=${workspaceGid}` : ''}`),
   
   generateAgentKey: () =>
     api.post<AgentKeyResponse>('/agent/generate-key'),
