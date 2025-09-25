@@ -56,6 +56,10 @@ jobs:
           # Build application
           npm run build
           
+          # Debug: List built files
+          echo "=== Built dist/routes files ==="
+          ls -la dist/routes/ || echo "dist/routes directory not found"
+          
           # Remove dev dependencies after build
           npm ci --production
           
@@ -97,4 +101,4 @@ jobs:
     - name: Health Check
       run: |
         sleep 30
-        curl -f https://asanabridge.com/api/health || exit 1
+        curl -f https://asanabridge.com/health || exit 1

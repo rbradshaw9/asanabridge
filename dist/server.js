@@ -57,6 +57,8 @@ const sync_1 = __importDefault(require("./routes/sync"));
 app.use('/api/sync', sync_1.default);
 const download_1 = __importDefault(require("./routes/download"));
 app.use('/api/download', download_1.default);
+const deploy_info_1 = __importDefault(require("./routes/deploy-info"));
+app.use('/api/deploy', deploy_info_1.default);
 // Basic API routes (will expand these)
 app.get('/api/status', (_req, res) => {
     res.json({

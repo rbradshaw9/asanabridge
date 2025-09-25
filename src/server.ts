@@ -58,6 +58,8 @@ import syncRoutes from './routes/sync';
 app.use('/api/sync', syncRoutes);
 import downloadRoutes from './routes/download';
 app.use('/api/download', downloadRoutes);
+import deployInfoRoutes from './routes/deploy-info';
+app.use('/api/deploy', deployInfoRoutes);
 
 // Basic API routes (will expand these)
 app.get('/api/status', (_req, res) => {

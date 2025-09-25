@@ -547,9 +547,10 @@
         <div class="container">
             <div class="footer-links">
                 <a href="/health">Health Check</a>
-                <a href="/api/status">API Status</a>
+                <a href="/api/deploy/info" target="_blank">Deployment Info</a>
                 <a href="https://github.com/rbradshaw9/asanabridge">GitHub</a>
             </div>
+            <div id="deployment-status" style="font-size: 0.8em; color: #666; margin-top: 10px;"></div>
             <p>&copy; 2025 AsanaBridge. Revolutionizing productivity workflows.</p>
         </div>
     </footer>
@@ -597,9 +598,24 @@
             }, 1000);
         }
 
+        // Fetch and display deployment info
+        async function loadDeploymentInfo() {
+            try {
+                const response = await fetch('/api/deploy/info');
+                const data = await response.json();
+                const statusEl = document.getElementById('deployment-status');
+                if (statusEl && data.status === 'deployed') {
+                    statusEl.innerHTML = `Last deployed: ${new Date(data.timestamp).toLocaleString()} | Commit: ${data.commit} | Token: ${data.deploymentToken}`;
+                }
+            } catch (error) {
+                console.log('Could not load deployment info:', error);
+            }
+        }
+
         // Initialize
         document.addEventListener('DOMContentLoaded', () => {
             createParticles();
+            loadDeploymentInfo();
         });
     </script>
 </body>
