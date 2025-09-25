@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import bcrypt from 'bcrypt';
-import { generateToken, authenticateToken, AuthenticatedRequest } from '../services/auth';
+import { generateToken, authenticateToken, AuthenticatedRequest, AuthService } from '../services/auth';
 import { logger } from '../config/logger';
 import { prisma } from '../config/database';
 import { z } from 'zod';
@@ -52,10 +52,15 @@ router.post('/register', async (req: Request, res: Response) => {
       }
     });
     
-    // Generate JWT token
-    const token = generateToken(user.id);
+    // Generate JWT token with full payload
+    const token = AuthService.generateToken({
+      userId: user.id,
+      email: user.email,
+      plan: user.plan,
+      isAdmin: user.isAdmin
+    });
     
-    logger.info('User registered successfully', { userId: user.id, email: user.email });
+    logger.info('User registered successfully', { userId: user.id, email: user.email, isAdmin: user.isAdmin });
     
     res.status(201).json({
       message: 'User registered successfully',
@@ -97,10 +102,15 @@ router.post('/login', async (req: Request, res: Response) => {
       return res.status(401).json({ error: 'Invalid email or password' });
     }
     
-    // Generate JWT token
-    const token = generateToken(user.id);
+    // Generate JWT token with full payload
+    const token = AuthService.generateToken({
+      userId: user.id,
+      email: user.email,
+      plan: user.plan,
+      isAdmin: user.isAdmin
+    });
     
-    logger.info('User logged in successfully', { userId: user.id, email: user.email });
+    logger.info('User logged in successfully', { userId: user.id, email: user.email, isAdmin: user.isAdmin });
     
     res.json({
       message: 'Login successful',
@@ -108,6 +118,7 @@ router.post('/login', async (req: Request, res: Response) => {
         id: user.id,
         email: user.email,
         name: user.name,
+        isAdmin: user.isAdmin,
         plan: user.plan,
         createdAt: user.createdAt
       },

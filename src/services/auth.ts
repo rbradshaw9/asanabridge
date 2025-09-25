@@ -8,6 +8,7 @@ export interface JWTPayload {
   userId: string;
   email: string;
   plan: string;
+  isAdmin?: boolean;
 }
 
 export interface AuthenticatedRequest extends Request {
@@ -82,3 +83,12 @@ export function requirePlan(plan: 'FREE' | 'PRO') {
     next();
   };
 }
+
+export const requireAdmin = (req: AuthenticatedRequest, res: Response, next: NextFunction): void => {
+  if (!req.user || !req.user.isAdmin) {
+    logger.warn('Admin access attempt by non-admin user', { userId: req.user?.userId });
+    res.status(403).json({ error: 'Admin access required' });
+    return;
+  }
+  next();
+};

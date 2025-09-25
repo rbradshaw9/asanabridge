@@ -13,6 +13,7 @@ import agentRoutes from './routes/agent';
 import syncRoutes from './routes/sync';
 import downloadRoutes from './routes/download';
 import deployInfoRoutes from './routes/deploy-info';
+import adminRoutes from './routes/admin';
 
 // Load environment variables first
 dotenv.config();
@@ -110,6 +111,7 @@ app.use('/api/agent', agentRoutes);
 app.use('/api/sync', syncRoutes);
 app.use('/api/download', downloadRoutes);
 app.use('/api/deploy', deployInfoRoutes);
+app.use('/api/admin', adminRoutes);
 
 // Basic API routes (will expand these)
 app.get('/api/status', (_req, res) => {
