@@ -7,8 +7,9 @@ set -e
 
 echo "🚀 Building AsanaBridge Status App..."
 
-AGENT_DIR="/Users/ryanbradshaw/Git Projects/asanabridge/asanabridge/omnifocus-agent"
-cd "$AGENT_DIR"
+# Get the directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
 
 # Compile the Swift status app
 echo "📦 Compiling Swift application..."

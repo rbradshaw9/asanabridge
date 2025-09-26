@@ -8,7 +8,7 @@ set -e
 echo "🔧 Creating AsanaBridge Menu Bar App..."
 
 # Create the menu bar app directory structure
-AGENT_DIR="/Users/ryanbradshaw/Git Projects/asanabridge/asanabridge/omnifocus-agent"
+AGENT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MENUBAR_DIR="$AGENT_DIR/MenuBarStatus"
 XCODE_PROJECT="$MENUBAR_DIR/AsanaBridgeStatus.xcodeproj"
 

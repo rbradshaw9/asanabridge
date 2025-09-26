@@ -8,7 +8,7 @@ set -e
 echo "🚀 Building AsanaBridge macOS App..."
 
 # Directories
-PROJECT_DIR="/Users/ryanbradshaw/Git Projects/asanabridge/asanabridge/omnifocus-agent"
+PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUILD_DIR="$PROJECT_DIR/build"
 APP_DIR="$BUILD_DIR/AsanaBridge.app"
 RESOURCES_DIR="$APP_DIR/Contents/Resources"

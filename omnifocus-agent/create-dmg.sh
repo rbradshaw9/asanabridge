@@ -8,7 +8,7 @@ set -e
 echo "📦 Creating AsanaBridge DMG Installer..."
 
 # Directories
-PROJECT_DIR="/Users/ryanbradshaw/Git Projects/asanabridge/asanabridge/omnifocus-agent"
+PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUILD_DIR="$PROJECT_DIR/build"
 APP_PATH="$BUILD_DIR/AsanaBridge.app"
 DMG_DIR="$BUILD_DIR/dmg"
