@@ -229,4 +229,152 @@ router.patch('/users/:userId/admin', async (req: AuthenticatedRequest, res: Resp
   }
 });
 
+// Get all support tickets (admin only)
+router.get('/support-tickets', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 20;
+    const status = req.query.status as string;
+
+    const skip = (page - 1) * limit;
+
+    const where = status && status !== 'all' ? { status: status as any } : {};
+
+    const [tickets, totalCount] = await Promise.all([
+      prisma.supportTicket.findMany({
+        where,
+        skip,
+        take: limit,
+        include: {
+          user: {
+            select: {
+              id: true,
+              email: true,
+              name: true
+            }
+          },
+          responses: {
+            select: {
+              id: true,
+              message: true,
+              isFromUser: true,
+              createdAt: true
+            },
+            orderBy: { createdAt: 'desc' },
+            take: 1
+          }
+        },
+        orderBy: { createdAt: 'desc' }
+      }),
+      prisma.supportTicket.count({ where })
+    ]);
+
+    res.json({
+      tickets,
+      pagination: {
+        page,
+        limit,
+        totalCount,
+        totalPages: Math.ceil(totalCount / limit)
+      }
+    });
+
+    logger.info('Admin accessed support tickets', { 
+      adminId: req.user?.userId, 
+      page, 
+      status: status || 'all' 
+    });
+  } catch (error) {
+    logger.error('Failed to fetch support tickets for admin', error);
+    res.status(500).json({ error: 'Failed to fetch support tickets' });
+  }
+});
+
+// Update support ticket status
+router.patch('/support-tickets/:ticketId/status', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { ticketId } = req.params;
+    const { status } = req.body;
+
+    if (!['OPEN', 'IN_PROGRESS', 'WAITING', 'CLOSED'].includes(status)) {
+      return res.status(400).json({ error: 'Invalid status' });
+    }
+
+    const ticket = await prisma.supportTicket.update({
+      where: { id: ticketId },
+      data: { 
+        status,
+        updatedAt: new Date()
+      },
+      include: {
+        user: {
+          select: {
+            email: true,
+            name: true
+          }
+        }
+      }
+    });
+
+    res.json({ 
+      message: 'Ticket status updated successfully',
+      ticket 
+    });
+
+    logger.info('Admin updated support ticket status', { 
+      adminId: req.user?.userId, 
+      ticketId,
+      newStatus: status
+    });
+  } catch (error) {
+    logger.error('Failed to update support ticket status', error);
+    res.status(500).json({ error: 'Failed to update ticket status' });
+  }
+});
+
+// Respond to support ticket
+router.post('/support-tickets/:ticketId/respond', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { ticketId } = req.params;
+    const { message } = req.body;
+
+    if (!message || message.trim().length === 0) {
+      return res.status(400).json({ error: 'Response message is required' });
+    }
+
+    // Create response
+    const response = await prisma.supportTicketResponse.create({
+      data: {
+        ticketId,
+        message: message.trim(),
+        isFromUser: false, // Admin response
+        createdAt: new Date()
+      }
+    });
+
+    // Update ticket status if it was closed
+    await prisma.supportTicket.update({
+      where: { id: ticketId },
+      data: { 
+        status: 'IN_PROGRESS',
+        updatedAt: new Date()
+      }
+    });
+
+    res.json({ 
+      message: 'Response added successfully',
+      response 
+    });
+
+    logger.info('Admin responded to support ticket', { 
+      adminId: req.user?.userId, 
+      ticketId,
+      responseLength: message.length
+    });
+  } catch (error) {
+    logger.error('Failed to respond to support ticket', error);
+    res.status(500).json({ error: 'Failed to add response' });
+  }
+});
+
 export default router;

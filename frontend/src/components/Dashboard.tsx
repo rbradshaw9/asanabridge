@@ -16,7 +16,8 @@ import {
   Calendar,
   Zap,
   CreditCard,
-  HelpCircle
+  HelpCircle,
+  Shield
 } from 'lucide-react';
 
 // User Menu Component
@@ -42,8 +43,8 @@ const UserMenu: React.FC<{
 
       {isOpen && (
         <>
-          <div className="fixed inset-0 z-[90]" onClick={() => setIsOpen(false)}></div>
-          <div className="absolute right-0 mt-2 w-56 bg-slate-800 border border-white/20 rounded-lg shadow-lg z-[100]">
+          <div className="fixed inset-0 z-[9999]" onClick={() => setIsOpen(false)}></div>
+          <div className="absolute right-0 mt-2 w-56 bg-slate-800 border border-white/20 rounded-lg shadow-lg z-[10000]">
             <div className="py-2">
               <div className="px-4 py-2 border-b border-white/10">
                 <p className="text-sm font-medium text-white truncate">{user?.name}</p>
@@ -69,6 +70,18 @@ const UserMenu: React.FC<{
                 <CreditCard size={16} />
                 Billing
               </button>
+              {user?.isAdmin && (
+                <button
+                  onClick={() => {
+                    navigate('/admin');
+                    setIsOpen(false);
+                  }}
+                  className="w-full text-left px-4 py-2 text-sm text-purple-400 hover:text-purple-300 hover:bg-purple-600/10 transition-colors flex items-center gap-2"
+                >
+                  <Shield size={16} />
+                  Admin Dashboard
+                </button>
+              )}
               <button
                 onClick={() => {
                   onLogout();

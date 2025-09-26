@@ -38,6 +38,8 @@ class AsanaBridgeStatusApp: NSObject, NSApplicationDelegate {
         setupMenuBar()
         startStatusUpdates()
         checkInitialStatus()
+        // Show the status window immediately on launch
+        showStatusWindow()
     }
     
     func setupMenuBar() {

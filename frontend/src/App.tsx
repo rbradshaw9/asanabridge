@@ -5,6 +5,7 @@ import LandingPage from './components/LandingPage';
 import LoginPage from './components/LoginPage';
 import Dashboard from './components/Dashboard';
 import AccountSettingsPage from './components/AccountSettingsPage';
+import AdminDashboard from './components/AdminDashboard';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, loading } = useAuth();
@@ -65,6 +66,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <AccountSettingsPage />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/admin" 
+            element={
+              <ProtectedRoute>
+                <AdminDashboard />
               </ProtectedRoute>
             } 
           />

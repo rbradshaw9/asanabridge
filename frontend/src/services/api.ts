@@ -33,9 +33,11 @@ api.interceptors.response.use(
 
 export interface User {
   id: string;
+  userId: string; // For compatibility with existing code
   email: string;
   name: string;
   plan: string;
+  isAdmin: boolean;
   createdAt: string;
   updatedAt?: string;
 }
