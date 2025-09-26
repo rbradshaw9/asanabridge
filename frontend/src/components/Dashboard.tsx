@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { authApi } from '../services/api';
@@ -27,10 +28,104 @@ const UserMenu: React.FC<{
 }> = ({ user, onLogout }) => {
   const [isOpen, setIsOpen] = useState(false);
   const navigate = useNavigate();
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, right: 0 });
+
+  useEffect(() => {
+    if (isOpen && buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect();
+      setDropdownPosition({
+        top: rect.bottom + 8,
+        right: window.innerWidth - rect.right,
+      });
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsOpen(false);
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener('keydown', handleEscape);
+      return () => document.removeEventListener('keydown', handleEscape);
+    }
+  }, [isOpen]);
+
+  const dropdownContent = isOpen ? (
+    <>
+      {/* Backdrop */}
+      <div 
+        className="fixed inset-0 z-[999999]" 
+        onClick={() => setIsOpen(false)}
+        style={{ backgroundColor: 'transparent' }}
+      />
+      {/* Dropdown Menu */}
+      <div 
+        className="fixed z-[9999999] w-56 bg-slate-800 border border-white/20 rounded-lg shadow-2xl"
+        style={{
+          top: `${dropdownPosition.top}px`,
+          right: `${dropdownPosition.right}px`,
+        }}
+      >
+        <div className="py-2">
+          <div className="px-4 py-2 border-b border-white/10">
+            <p className="text-sm font-medium text-white truncate">{user?.name}</p>
+            <p className="text-xs text-gray-400 truncate">{user?.email}</p>
+          </div>
+          <button
+            onClick={() => {
+              navigate('/account?tab=profile');
+              setIsOpen(false);
+            }}
+            className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:text-white hover:bg-white/10 transition-colors flex items-center gap-2"
+          >
+            <User size={16} />
+            Profile
+          </button>
+          <button
+            onClick={() => {
+              navigate('/account?tab=billing');
+              setIsOpen(false);
+            }}
+            className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:text-white hover:bg-white/10 transition-colors flex items-center gap-2"
+          >
+            <CreditCard size={16} />
+            Billing
+          </button>
+          {user?.isAdmin && (
+            <button
+              onClick={() => {
+                navigate('/admin');
+                setIsOpen(false);
+              }}
+              className="w-full text-left px-4 py-2 text-sm text-purple-400 hover:text-purple-300 hover:bg-purple-600/10 transition-colors flex items-center gap-2"
+            >
+              <Shield size={16} />
+              Admin Dashboard
+            </button>
+          )}
+          <button
+            onClick={() => {
+              onLogout();
+              setIsOpen(false);
+            }}
+            className="w-full text-left px-4 py-2 text-sm text-red-400 hover:text-red-300 hover:bg-red-600/10 transition-colors flex items-center gap-2"
+          >
+            <LogOut size={16} />
+            Logout
+          </button>
+        </div>
+      </div>
+    </>
+  ) : null;
 
   return (
     <div className="relative">
       <button
+        ref={buttonRef}
         onClick={() => setIsOpen(!isOpen)}
         className="flex items-center gap-2 text-gray-300 hover:text-white transition-colors p-2 rounded-lg hover:bg-white/10"
       >
@@ -41,61 +136,7 @@ const UserMenu: React.FC<{
         </svg>
       </button>
 
-      {isOpen && (
-        <>
-          <div className="fixed inset-0 z-[9999]" onClick={() => setIsOpen(false)}></div>
-          <div className="absolute right-0 mt-2 w-56 bg-slate-800 border border-white/20 rounded-lg shadow-lg z-[10000]">
-            <div className="py-2">
-              <div className="px-4 py-2 border-b border-white/10">
-                <p className="text-sm font-medium text-white truncate">{user?.name}</p>
-                <p className="text-xs text-gray-400 truncate">{user?.email}</p>
-              </div>
-              <button
-                onClick={() => {
-                  navigate('/account?tab=profile');
-                  setIsOpen(false);
-                }}
-                className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:text-white hover:bg-white/10 transition-colors flex items-center gap-2"
-              >
-                <User size={16} />
-                Profile
-              </button>
-              <button
-                onClick={() => {
-                  navigate('/account?tab=billing');
-                  setIsOpen(false);
-                }}
-                className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:text-white hover:bg-white/10 transition-colors flex items-center gap-2"
-              >
-                <CreditCard size={16} />
-                Billing
-              </button>
-              {user?.isAdmin && (
-                <button
-                  onClick={() => {
-                    navigate('/admin');
-                    setIsOpen(false);
-                  }}
-                  className="w-full text-left px-4 py-2 text-sm text-purple-400 hover:text-purple-300 hover:bg-purple-600/10 transition-colors flex items-center gap-2"
-                >
-                  <Shield size={16} />
-                  Admin Dashboard
-                </button>
-              )}
-              <button
-                onClick={() => {
-                  onLogout();
-                  setIsOpen(false);
-                }}
-                className="w-full text-left px-4 py-2 text-sm text-red-400 hover:text-red-300 hover:bg-red-600/10 transition-colors flex items-center gap-2"
-              >
-                <LogOut size={16} />
-                Logout
-              </button>
-            </div>
-          </div>
-        </>
-      )}
+      {dropdownContent && createPortal(dropdownContent, document.body)}
     </div>
   );
 };
