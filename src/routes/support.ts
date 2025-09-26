@@ -16,6 +16,28 @@ const supportTicketSchema = z.object({
   priority: z.enum(['low', 'normal', 'high', 'urgent']).default('normal')
 });
 
+// Helper function to convert frontend enum values to Prisma enum values
+const mapCategoryToPrisma = (category: string) => {
+  const mapping: { [key: string]: string } = {
+    'general': 'GENERAL',
+    'technical': 'TECHNICAL',
+    'billing': 'BILLING',
+    'feature': 'FEATURE',
+    'bug': 'BUG'
+  };
+  return mapping[category] || 'GENERAL';
+};
+
+const mapPriorityToPrisma = (priority: string) => {
+  const mapping: { [key: string]: string } = {
+    'low': 'LOW',
+    'normal': 'NORMAL',
+    'high': 'HIGH',
+    'urgent': 'URGENT'
+  };
+  return mapping[priority] || 'NORMAL';
+};
+
 // Create support ticket
 router.post('/ticket', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
@@ -28,10 +50,10 @@ router.post('/ticket', authenticateToken, async (req: AuthenticatedRequest, res:
         name: ticketData.name,
         email: ticketData.email,
         subject: ticketData.subject,
-        category: ticketData.category,
+        category: mapCategoryToPrisma(ticketData.category) as any,
         message: ticketData.message,
-        priority: ticketData.priority,
-        status: 'open'
+        priority: mapPriorityToPrisma(ticketData.priority) as any,
+        status: 'OPEN' as any
       }
     });
 
@@ -149,10 +171,10 @@ router.post('/tickets/:ticketId/response', authenticateToken, async (req: Authen
     });
 
     // Update ticket status if it was closed
-    if (ticket.status === 'closed') {
+    if (ticket.status === 'CLOSED') {
       await prisma.supportTicket.update({
         where: { id: ticketId },
-        data: { status: 'open' }
+        data: { status: 'OPEN' as any }
       });
     }
 
