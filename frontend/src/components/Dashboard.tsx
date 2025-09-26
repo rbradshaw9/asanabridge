@@ -729,6 +729,20 @@ const Dashboard: React.FC = () => {
               )}
 
             </div>
+            
+            {/* Installation Instructions */}
+            <div className="mt-4 bg-blue-500/20 border border-blue-500/50 rounded-lg p-4">
+              <p className="text-blue-200 text-sm font-medium mb-2">📱 macOS Installation Instructions:</p>
+              <ol className="text-blue-200 text-sm space-y-1 list-decimal list-inside">
+                <li>Download and open the DMG file</li>
+                <li>Drag AsanaBridge to Applications folder</li>
+                <li><strong>Right-click</strong> AsanaBridge in Applications → Select "Open"</li>
+                <li>Click "Open" when macOS asks for confirmation</li>
+              </ol>
+              <p className="text-blue-300 text-xs mt-2">
+                ⚠️ macOS will show a security warning since this app isn't notarized by Apple. This is safe to ignore.
+              </p>
+            </div>
           </div>
         </div>
 
