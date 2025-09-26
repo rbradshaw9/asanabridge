@@ -134,6 +134,26 @@ export const authApi = {
   
   health: () =>
     api.get('/health'),
+
+  // Support methods
+  createSupportTicket: (ticketData: {
+    name: string;
+    email: string;
+    subject: string;
+    category: string;
+    message: string;
+    priority: string;
+  }) =>
+    api.post('/support/ticket', ticketData),
+
+  getSupportTickets: () =>
+    api.get<{ tickets: any[] }>('/support/tickets'),
+
+  getSupportTicket: (ticketId: string) =>
+    api.get<{ ticket: any }>(`/support/tickets/${ticketId}`),
+
+  addSupportResponse: (ticketId: string, message: string) =>
+    api.post(`/support/tickets/${ticketId}/response`, { message }),
 };
 
 export default api;

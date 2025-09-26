@@ -29,6 +29,10 @@ mkdir -p "$DMG_DIR"
 echo "📱 Copying AsanaBridge.app..."
 cp -R "$APP_PATH" "$DMG_DIR/"
 
+# Copy installation instructions
+echo "📋 Adding installation instructions..."
+cp "$PROJECT_DIR/INSTALL_INSTRUCTIONS.txt" "$DMG_DIR/"
+
 # Create Applications symlink
 echo "🔗 Creating Applications symlink..."
 ln -s /Applications "$DMG_DIR/Applications"
@@ -64,6 +68,10 @@ hdiutil create -volname "AsanaBridge Installer" \
     -ov -format UDZO \
     "$BUILD_DIR/$DMG_NAME.dmg"
 
+# Remove quarantine from the DMG itself
+echo "🔓 Removing quarantine from DMG..."
+xattr -dr com.apple.quarantine "$BUILD_DIR/$DMG_NAME.dmg" 2>/dev/null || echo "⚠️  Quarantine removal failed, but continuing..."
+
 echo "✅ DMG created successfully!"
 echo "📍 Location: $BUILD_DIR/$DMG_NAME.dmg"
 echo "📏 Size: $(du -h "$BUILD_DIR/$DMG_NAME.dmg" | cut -f1)"
@@ -73,6 +81,16 @@ rm -rf "$DMG_DIR"
 
 echo "🎉 DMG installer ready for distribution!"
 echo ""
-echo "To distribute:"
-echo "1. Test the DMG: open '$BUILD_DIR/$DMG_NAME.dmg'"
-echo "2. For production: Add code signing and notarization"
+echo "⚠️  IMPORTANT: macOS Security Notice"
+echo "This app is not notarized by Apple. Users will need to:"
+echo "1. Download and mount the DMG"
+echo "2. Drag AsanaBridge to Applications"
+echo "3. Right-click AsanaBridge in Applications → Open"
+echo "4. Click 'Open' when prompted by macOS security"
+echo ""
+echo "Alternative method:"
+echo "1. After seeing the security warning, go to:"
+echo "   System Preferences → Security & Privacy → General"
+echo "2. Click 'Open Anyway' next to the AsanaBridge message"
+echo ""
+echo "For testing: open '$BUILD_DIR/$DMG_NAME.dmg'"

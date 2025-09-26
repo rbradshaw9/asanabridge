@@ -277,6 +277,8 @@ const AccountSettingsPage: React.FC = () => {
                           onChange={(e) => setPasswordData(prev => ({ ...prev, currentPassword: e.target.value }))}
                           className="w-full pl-10 pr-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
                           placeholder="Enter current password"
+                          autoComplete="current-password"
+                          spellCheck={false}
                         />
                       </div>
                     </div>
@@ -293,6 +295,8 @@ const AccountSettingsPage: React.FC = () => {
                           onChange={(e) => setPasswordData(prev => ({ ...prev, newPassword: e.target.value }))}
                           className="w-full pl-10 pr-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
                           placeholder="Enter new password"
+                          autoComplete="new-password"
+                          spellCheck={false}
                         />
                       </div>
                     </div>
@@ -309,6 +313,8 @@ const AccountSettingsPage: React.FC = () => {
                           onChange={(e) => setPasswordData(prev => ({ ...prev, confirmPassword: e.target.value }))}
                           className="w-full pl-10 pr-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
                           placeholder="Confirm new password"
+                          autoComplete="new-password"
+                          spellCheck={false}
                         />
                       </div>
                     </div>

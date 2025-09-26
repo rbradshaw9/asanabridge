@@ -4,6 +4,7 @@ import cron from 'node-cron';
 import { OmniFocusClient } from './omnifocus-client';
 import { AsanaBridgeAPI, loadAgentConfig } from './api-client';
 import { SetupWizard } from './setup-wizard';
+import { execSync } from 'child_process';
 
 // Load environment - try various locations
 dotenv.config();
@@ -41,6 +42,8 @@ class AsanaBridgeAgent {
   private config: any;
   private isRunning = false;
   private syncInProgress = false;
+  private lastSyncTime: Date | null = null;
+  private connectionStatus: 'connected' | 'disconnected' | 'error' = 'disconnected';
 
   constructor(config: any) {
     this.config = config;
@@ -48,8 +51,96 @@ class AsanaBridgeAgent {
     this.api = new AsanaBridgeAPI(config);
   }
 
+  private showNotification(title: string, message: string): void {
+    try {
+      // Use macOS osascript to show notification
+      const script = `display notification "${message}" with title "${title}"`;
+      execSync(`osascript -e '${script}'`, { stdio: 'ignore' });
+    } catch (error) {
+      // Fallback to console if notification fails
+      console.log(`📱 ${title}: ${message}`);
+    }
+  }
+
+  private updateMenuBarStatus(status: 'connected' | 'disconnected' | 'syncing' | 'error', message?: string): void {
+    try {
+      this.connectionStatus = status === 'syncing' ? this.connectionStatus : status;
+      
+      // Create a simple status display using osascript
+      const statusIcon = this.getStatusIcon(status);
+      const statusMessage = message || this.getStatusMessage(status);
+      
+      // For now, we'll just show notifications for status changes
+      // In a full implementation, this would update a proper menu bar app
+      if (message) {
+        console.log(`🔔 Status: ${statusIcon} ${statusMessage}`);
+      }
+    } catch (error) {
+      console.log(`📊 Status update failed: ${error}`);
+    }
+  }
+
+  private getStatusIcon(status: 'connected' | 'disconnected' | 'syncing' | 'error'): string {
+    switch (status) {
+      case 'connected': return '✅';
+      case 'disconnected': return '❌';
+      case 'syncing': return '🔄';
+      case 'error': return '⚠️';
+      default: return '❓';
+    }
+  }
+
+  private getStatusMessage(status: 'connected' | 'disconnected' | 'syncing' | 'error'): string {
+    switch (status) {
+      case 'connected': 
+        const lastSync = this.lastSyncTime ? `Last sync: ${this.lastSyncTime.toLocaleTimeString()}` : 'Ready to sync';
+        return `AsanaBridge Connected - ${lastSync}`;
+      case 'disconnected': return 'AsanaBridge - Not connected';
+      case 'syncing': return 'AsanaBridge - Syncing tasks...';
+      case 'error': return 'AsanaBridge - Connection error';
+      default: return 'AsanaBridge - Unknown status';
+    }
+  }
+
+  private createMenuBarPopup(): void {
+    try {
+      const statusMessage = this.getStatusMessage(this.connectionStatus);
+      const lastSyncText = this.lastSyncTime ? 
+        `Last sync: ${this.lastSyncTime.toLocaleString()}` : 
+        'No sync performed yet';
+      
+      // Create a simple dialog showing current status
+      const script = `
+        display dialog "${statusMessage}
+        
+${lastSyncText}
+        
+Status: ${this.isRunning ? 'Running' : 'Stopped'}
+Sync in progress: ${this.syncInProgress ? 'Yes' : 'No'}" \\
+        with title "AsanaBridge Status" \\
+        buttons {"Close", "Sync Now", "Open Dashboard"} \\
+        default button "Close"
+      `;
+      
+      const result = execSync(`osascript -e '${script}'`, { encoding: 'utf8' }).trim();
+      
+      if (result.includes('Sync Now')) {
+        this.performSync();
+      } else if (result.includes('Open Dashboard')) {
+        execSync('open https://asanabridge.com/dashboard');
+      }
+    } catch (error) {
+      // User cancelled or error occurred
+      console.log('Status popup cancelled or failed');
+    }
+  }
+
   async start(): Promise<void> {
     console.log('🚀 Starting AsanaBridge OmniFocus Agent...');
+    
+    // Show system notification that agent is starting
+    this.showNotification('AsanaBridge Agent', 'Starting OmniFocus sync agent...');
+    this.updateMenuBarStatus('disconnected', 'Starting agent...');
     
     try {
       // Test OmniFocus connection
@@ -59,6 +150,7 @@ class AsanaBridgeAgent {
       // Register with web service
       await this.api.registerAgent(ofVersion);
       console.log('✅ Registered with AsanaBridge web service');
+      this.updateMenuBarStatus('connected', 'Registered with web service');
 
       // Get plan-based configuration
       const serverConfig = await this.api.getAgentConfig();
@@ -80,14 +172,31 @@ class AsanaBridgeAgent {
 
       this.isRunning = true;
       console.log(`✅ Agent running - sync every ${syncInterval} minutes (${serverConfig.plan} plan)`);
+      
+      // Show success notification and update status
+      this.showNotification('AsanaBridge Agent', `✅ Agent running! Syncing every ${syncInterval} minutes.`);
+      this.updateMenuBarStatus('connected', `Ready - syncing every ${syncInterval} minutes`);
+
+      // Set up status popup handler (simulates menu bar click)
+      this.setupStatusHandler();
 
       // Initial sync
       await this.performSync();
 
     } catch (error) {
       console.error('❌ Failed to start agent:', error);
+      this.updateMenuBarStatus('error', 'Failed to start agent');
       process.exit(1);
     }
+  }
+
+  private setupStatusHandler(): void {
+    // Set up a simple way to show status popup
+    // In practice, this would be handled by the actual menu bar app
+    process.on('SIGUSR1', () => {
+      console.log('📊 Showing status popup...');
+      this.createMenuBarPopup();
+    });
   }
 
   private startLocalServer(): void {
@@ -117,6 +226,25 @@ class AsanaBridgeAgent {
       }
     });
 
+    app.get('/status/popup', (_req, res) => {
+      try {
+        this.createMenuBarPopup();
+        res.json({ message: 'Status popup shown' });
+      } catch (error: any) {
+        res.status(500).json({ error: error.message });
+      }
+    });
+
+    app.get('/status', (_req, res) => {
+      res.json({
+        status: this.connectionStatus,
+        running: this.isRunning,
+        syncInProgress: this.syncInProgress,
+        lastSync: this.lastSyncTime?.toISOString() || null,
+        message: this.getStatusMessage(this.connectionStatus)
+      });
+    });
+
     const port = 7842; // AsanaBridge agent port
     app.listen(port, 'localhost', () => {
       console.log(`🔧 Agent API listening on http://localhost:${port}`);
@@ -138,6 +266,7 @@ class AsanaBridgeAgent {
 
     this.syncInProgress = true;
     console.log('🔄 Starting sync cycle...');
+    this.updateMenuBarStatus('syncing', 'Syncing tasks...');
 
     try {
       // Check web service health
@@ -158,10 +287,13 @@ class AsanaBridgeAgent {
       // Process any pending commands from web service
       await this.processPendingCommands();
 
+      this.lastSyncTime = new Date();
       console.log('✅ Sync cycle completed');
+      this.updateMenuBarStatus('connected', 'Sync completed successfully');
 
     } catch (error: any) {
       console.error('❌ Sync failed:', error.message);
+      this.updateMenuBarStatus('error', `Sync failed: ${error.message}`);
     } finally {
       this.syncInProgress = false;
     }

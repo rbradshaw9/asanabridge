@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { authApi } from '../services/api';
+import OnboardingWizard from './OnboardingWizard';
+import SupportForm from './SupportForm';
 import { 
   User, 
   LogOut, 
@@ -13,7 +15,8 @@ import {
   Activity,
   Calendar,
   Zap,
-  CreditCard
+  CreditCard,
+  HelpCircle
 } from 'lucide-react';
 
 // User Menu Component
@@ -39,8 +42,8 @@ const UserMenu: React.FC<{
 
       {isOpen && (
         <>
-          <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)}></div>
-          <div className="absolute right-0 mt-2 w-56 bg-slate-800 border border-white/20 rounded-lg shadow-lg z-50">
+          <div className="fixed inset-0 z-[60]" onClick={() => setIsOpen(false)}></div>
+          <div className="absolute right-0 mt-2 w-56 bg-slate-800 border border-white/20 rounded-lg shadow-lg z-[70]">
             <div className="py-2">
               <div className="px-4 py-2 border-b border-white/10">
                 <p className="text-sm font-medium text-white truncate">{user?.name}</p>
@@ -106,6 +109,8 @@ const Dashboard: React.FC = () => {
     canAddMore: boolean;
   } | null>(null);
   const [syncMappings, setSyncMappings] = useState<any[]>([]);
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [showSupport, setShowSupport] = useState(false);
 
   // Check Asana connection status on component mount
   useEffect(() => {
@@ -113,7 +118,24 @@ const Dashboard: React.FC = () => {
     checkAgentStatus();
     loadPlanInfo();
     loadSyncMappings();
+    
+    // Check if user needs onboarding
+    checkOnboardingStatus();
   }, []);
+
+  const checkOnboardingStatus = () => {
+    // Show onboarding if user hasn't completed basic setup
+    const hasCompletedOnboarding = localStorage.getItem('onboarding-completed');
+    if (!hasCompletedOnboarding) {
+      // Delay showing onboarding to let other data load first
+      setTimeout(() => {
+        const needsOnboarding = !asanaConnected || syncMappings.length === 0 || !agentStatus.connected;
+        if (needsOnboarding) {
+          setShowOnboarding(true);
+        }
+      }, 1000);
+    }
+  };
 
   const checkAsanaStatus = async () => {
     try {
@@ -348,6 +370,12 @@ const Dashboard: React.FC = () => {
     }
   };
 
+  // Onboarding handlers
+  const handleCloseOnboarding = () => {
+    setShowOnboarding(false);
+    localStorage.setItem('onboarding-completed', 'true');
+  };
+
   const handleAsanaConnect = async () => {
     setLoading(true);
     setError('');
@@ -417,6 +445,21 @@ const Dashboard: React.FC = () => {
             </div>
             
             <div className="flex items-center gap-4">
+              <button
+                onClick={() => setShowOnboarding(true)}
+                className="px-3 py-2 bg-white/10 text-gray-300 hover:text-white hover:bg-white/20 rounded-lg transition-colors text-sm font-medium"
+              >
+                Setup Guide
+              </button>
+              
+              <button
+                onClick={() => setShowSupport(true)}
+                className="flex items-center gap-2 px-3 py-2 bg-white/10 text-gray-300 hover:text-white hover:bg-white/20 rounded-lg transition-colors text-sm font-medium"
+              >
+                <HelpCircle size={16} />
+                Support
+              </button>
+              
               {planInfo?.plan === 'FREE' && (
                 <button
                   onClick={() => navigate('/account?tab=billing')}
@@ -434,7 +477,7 @@ const Dashboard: React.FC = () => {
 
       {/* Simple Notifications */}
       {error && (
-        <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 max-w-md w-full mx-4">
+        <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-[80] max-w-md w-full mx-4">
           <div className="bg-red-500/90 backdrop-blur-sm text-white px-4 py-3 rounded-lg shadow-lg">
             <p className="text-sm">{error}</p>
           </div>
@@ -442,7 +485,7 @@ const Dashboard: React.FC = () => {
       )}
       
       {successMessage && (
-        <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 max-w-md w-full mx-4">
+        <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-[80] max-w-md w-full mx-4">
           <div className="bg-green-500/90 backdrop-blur-sm text-white px-4 py-3 rounded-lg shadow-lg">
             <p className="text-sm">{successMessage}</p>
           </div>
@@ -919,6 +962,28 @@ const Dashboard: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Onboarding Wizard */}
+      {showOnboarding && (
+        <OnboardingWizard
+          asanaConnected={asanaConnected}
+          agentStatus={agentStatus}
+          syncMappings={syncMappings}
+          onClose={handleCloseOnboarding}
+          onConnectAsana={handleAsanaConnect}
+          onGenerateAgentKey={handleGenerateAgentKey}
+          onDownloadAgent={handleDownloadAgent}
+          onSetupSync={handleSetupSync}
+        />
+      )}
+
+      {/* Support Form */}
+      {showSupport && (
+        <SupportForm
+          isOpen={showSupport}
+          onClose={() => setShowSupport(false)}
+        />
       )}
     </div>
   );
