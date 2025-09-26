@@ -419,7 +419,7 @@ const Dashboard: React.FC = () => {
             <div className="flex items-center gap-4">
               {planInfo?.plan === 'FREE' && (
                 <button
-                  onClick={() => navigate('/account-settings?tab=billing')}
+                  onClick={() => navigate('/account?tab=billing')}
                   className="px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white text-sm font-semibold rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all duration-200"
                 >
                   Upgrade to Pro
@@ -481,7 +481,7 @@ const Dashboard: React.FC = () => {
               <div className="mt-3 px-3 py-2 bg-yellow-600/20 rounded-lg flex flex-col sm:flex-row sm:items-center gap-2">
                 <p className="text-yellow-400 text-sm flex-1">Plan limit reached.</p>
                 <button
-                  onClick={() => navigate('/account-settings?tab=billing')}
+                  onClick={() => navigate('/account?tab=billing')}
                   className="px-3 py-1 bg-gradient-to-r from-blue-600 to-purple-600 text-white text-xs font-semibold rounded hover:from-blue-700 hover:to-purple-700 transition-all duration-200"
                 >
                   Upgrade
@@ -495,7 +495,7 @@ const Dashboard: React.FC = () => {
                     📅 Free plan: Hourly sync • 🚀 Pro plan: Real-time sync (5min intervals)
                   </p>
                   <button
-                    onClick={() => navigate('/account-settings?tab=billing')}
+                    onClick={() => navigate('/account?tab=billing')}
                     className="px-2 py-1 bg-gradient-to-r from-blue-600/50 to-purple-600/50 text-blue-200 text-xs font-medium rounded hover:from-blue-600 hover:to-purple-600 hover:text-white transition-all duration-200"
                   >
                     Upgrade
@@ -867,7 +867,7 @@ const Dashboard: React.FC = () => {
                       </p>
                     </div>
                     <button
-                      onClick={() => navigate('/account-settings?tab=billing')}
+                      onClick={() => navigate('/account?tab=billing')}
                       className="px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white text-sm font-semibold rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all duration-200 transform hover:scale-105 shadow-lg"
                     >
                       Upgrade to Pro

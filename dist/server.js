@@ -93,12 +93,10 @@ app.get('/health', async (_req, res) => {
         });
     }
 });
-// Serve static files from public directory
-app.use(express_1.default.static('public'));
-// Root route serves the landing page
-app.get('/', (_req, res) => {
-    res.sendFile(path_1.default.join(__dirname, '../public/index.html'));
-});
+// Serve static files from public directory (for downloads, etc.)
+app.use('/public', express_1.default.static('public'));
+// Serve React app static files
+app.use(express_1.default.static(path_1.default.join(__dirname, '../frontend/dist')));
 // API Routes
 app.use('/api/oauth', oauth_1.default);
 app.use('/api/auth', auth_1.default);
@@ -119,6 +117,10 @@ app.get('/api/status', (_req, res) => {
 // Catch-all for API routes
 app.use('/api/*', (_req, res) => {
     res.status(404).json({ error: 'API endpoint not found' });
+});
+// Catch-all handler: send back React's index.html file for client-side routing
+app.get('*', (_req, res) => {
+    res.sendFile(path_1.default.join(__dirname, '../frontend/dist/index.html'));
 });
 // Global error handler
 app.use((error, _req, res, _next) => {

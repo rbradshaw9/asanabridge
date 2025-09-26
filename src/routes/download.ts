@@ -13,7 +13,7 @@ router.get('/agent', authenticateToken, (req: AuthenticatedRequest, res: Respons
   const platform = 'macos';
   const arch = 'universal'; // We'll build universal binaries
   
-  const dmgPath = path.join(__dirname, '../../public/downloads/AsanaBridge-Installer.dmg');
+  const dmgPath = path.join(__dirname, '../../public/AsanaBridge-Installer.dmg');
   
   if (!fs.existsSync(dmgPath)) {
     return res.status(404).json({ 

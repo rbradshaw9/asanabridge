@@ -146,7 +146,14 @@ else
 fi
 
 # Ad-hoc code signing to prevent Gatekeeper issues
+echo "🔐 Code signing executable..."
+codesign --force --sign - "$MACOS_DIR/AsanaBridge" 2>/dev/null || echo "⚠️  Executable signing failed, but continuing..."
+
 echo "🔐 Code signing app bundle..."
-codesign --force --deep --sign - "$APP_DIR" 2>/dev/null || echo "⚠️  Code signing failed, but continuing..."
+codesign --force --deep --sign - "$APP_DIR" 2>/dev/null || echo "⚠️  App bundle signing failed, but continuing..."
+
+# Remove quarantine attribute that might cause issues
+echo "🔓 Removing quarantine attributes..."
+xattr -dr com.apple.quarantine "$APP_DIR" 2>/dev/null || echo "⚠️  Quarantine removal failed, but continuing..."
 
 echo "🎉 Build complete!"
