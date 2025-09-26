@@ -65,8 +65,8 @@ app.use(session({
 // app.use(passport.initialize());
 // app.use(passport.session());
 
-// Health check
-app.get('/health', async (_req, res) => {
+// Health check endpoints
+const healthCheck = async (_req: express.Request, res: express.Response) => {
   try {
     // Check database connection
     await prisma.$queryRaw`SELECT 1`;
@@ -85,7 +85,7 @@ app.get('/health', async (_req, res) => {
       timestamp: new Date().toISOString(),
       database: 'connected',
       commit: gitCommit,
-      deploymentTest: 'NEW_CODE_MARKER_v2'
+      deploymentTest: 'LATEST_ADMIN_FIXES_v3'
     });
   } catch (error) {
     logger.error('Health check failed', error);
@@ -95,7 +95,10 @@ app.get('/health', async (_req, res) => {
       database: 'disconnected'
     });
   }
-});
+};
+
+app.get('/health', healthCheck);
+app.get('/api/health', healthCheck);
 
 // Serve static files from public directory (for downloads, etc.)
 app.use('/public', express.static('public'));
