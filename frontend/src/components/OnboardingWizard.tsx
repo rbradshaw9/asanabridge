@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { CheckCircle, Circle, ArrowRight, ArrowLeft, X, ExternalLink, Download, Settings, Zap } from 'lucide-react';
+import { CheckCircle, Circle, ArrowRight, ArrowLeft, X, ExternalLink, Download, Settings, Zap, Key } from 'lucide-react';
 
 interface OnboardingStep {
   id: string;
@@ -224,30 +224,57 @@ const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
               </div>
             </div>
             
+            <div className="bg-slate-800/50 border border-white/10 rounded-lg p-6 mb-6">
+              <h4 className="text-lg font-semibold text-white mb-3 flex items-center gap-2">
+                <Key className="text-blue-400" size={20} />
+                What is an Agent Key?
+              </h4>
+              <div className="space-y-3 text-gray-300 text-sm">
+                <p>
+                  🔐 <strong>Secure Authentication:</strong> The agent key is a unique 64-character token that securely connects the macOS app to your AsanaBridge account without storing your username or password.
+                </p>
+                <p>
+                  🖥️ <strong>Desktop Connection:</strong> When you install the macOS app, it will ask for this key to identify which AsanaBridge account it should sync with.
+                </p>
+                <p>
+                  🔄 <strong>Automatic Sync:</strong> Once configured, the agent runs in the background, automatically syncing tasks between your selected Asana projects and OmniFocus.
+                </p>
+                <p>
+                  👤 <strong>Account-Specific:</strong> Each key is tied to your account and your selected sync projects, ensuring your data stays private and secure.
+                </p>
+              </div>
+            </div>
+
             {agentStatus.hasKey ? (
               <div className="bg-green-500/20 border border-green-500/50 rounded-lg p-4 mb-6">
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 mb-2">
                   <CheckCircle className="text-green-400" size={20} />
                   <span className="text-green-400 font-semibold">Agent Key Generated!</span>
                 </div>
-                <p className="text-green-300 text-sm mt-2">
-                  Your macOS agent is ready to authenticate with AsanaBridge.
+                <p className="text-green-300 text-sm mb-3">
+                  Your agent key has been generated and is ready to use with the macOS app.
                 </p>
+                <div className="bg-green-600/20 border border-green-500/30 rounded-lg p-3">
+                  <p className="text-green-200 text-sm">
+                    💡 <strong>Next Steps:</strong> Download the macOS app below, install it, and when prompted for the agent key during setup, copy it from your dashboard or regenerate a new one if needed.
+                  </p>
+                </div>
               </div>
             ) : (
               <div className="bg-blue-500/20 border border-blue-500/50 rounded-lg p-4 mb-6">
                 <p className="text-blue-200 mb-4">
-                  Generate a secure key that allows the macOS agent to communicate with your AsanaBridge account.
+                  Click below to generate your unique agent key. This will enable the macOS app to securely connect to your AsanaBridge account.
                 </p>
                 <div className="bg-yellow-500/20 border border-yellow-500/50 rounded-lg p-3 mb-4">
                   <p className="text-yellow-200 text-sm">
-                    ⚠️ Save this key securely - it will only be shown once!
+                    ⚠️ <strong>Important:</strong> You can always generate a new key from your dashboard if needed. Each new key will replace the previous one.
                   </p>
                 </div>
                 <button
                   onClick={onGenerateAgentKey}
-                  className="w-full bg-purple-600 hover:bg-purple-700 text-white font-semibold py-3 px-4 rounded-lg transition duration-200"
+                  className="w-full bg-purple-600 hover:bg-purple-700 text-white font-semibold py-3 px-4 rounded-lg transition duration-200 flex items-center justify-center gap-2"
                 >
+                  <Key size={16} />
                   Generate Agent Key
                 </button>
               </div>

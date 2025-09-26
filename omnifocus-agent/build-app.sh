@@ -33,6 +33,17 @@ echo "📋 Copying resources..."
 cp -r "$PROJECT_DIR/scripts" "$RESOURCES_DIR/"
 cp "$PROJECT_DIR/.env.example" "$RESOURCES_DIR/"
 
+# Build and include status app
+echo "🔧 Building status app..."
+if [ -f "$PROJECT_DIR/build-status-app.sh" ]; then
+    cd "$PROJECT_DIR"
+    ./build-status-app.sh
+    if [ -d "$PROJECT_DIR/AsanaBridgeStatus.app" ]; then
+        echo "📱 Including status app..."
+        cp -r "$PROJECT_DIR/AsanaBridgeStatus.app" "$RESOURCES_DIR/"
+    fi
+fi
+
 # Create Info.plist
 echo "📝 Creating Info.plist..."
 cat > "$APP_DIR/Contents/Info.plist" << 'EOF'

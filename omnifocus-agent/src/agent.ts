@@ -62,6 +62,129 @@ class AsanaBridgeAgent {
     }
   }
 
+  private showStartupProgress(): void {
+    try {
+      // Show a temporary dialog to indicate the app is starting
+      const script = `
+        set progress total steps to 3
+        set progress completed steps to 0
+        set progress description to "AsanaBridge is starting..."
+        set progress additional description to "Connecting to OmniFocus and AsanaBridge service"
+        
+        delay 1
+        set progress completed steps to 1
+        set progress additional description to "Checking OmniFocus connection..."
+        
+        delay 1
+        set progress completed steps to 2
+        set progress additional description to "Registering with AsanaBridge service..."
+        
+        delay 1
+        set progress completed steps to 3
+        set progress additional description to "Ready! Check your menu bar for the AsanaBridge icon."
+      `;
+      
+      // Run this in the background so it doesn't block startup
+      setTimeout(() => {
+        try {
+          execSync(`osascript -e '${script}'`, { stdio: 'ignore' });
+        } catch (error) {
+          // Progress dialog failed, just show a simple notification
+          this.showNotification('AsanaBridge', 'Agent is starting up...');
+        }
+      }, 100);
+    } catch (error) {
+      console.log('Failed to show startup progress');
+    }
+  }
+
+  private showSuccessDialog(syncInterval: number, plan: string): void {
+    try {
+      const script = `
+        display dialog "🎉 AsanaBridge is now running successfully!
+
+✅ Connected to OmniFocus
+✅ Connected to AsanaBridge service
+⏰ Syncing every ${syncInterval} minutes
+📊 Plan: ${plan}
+
+The AsanaBridge icon will appear in your menu bar. Click it anytime to:
+• Check sync status
+• Trigger manual sync
+• View connection details
+• Open your dashboard
+
+You can now close this dialog and continue using OmniFocus normally." \\
+        with title "AsanaBridge Ready" \\
+        buttons {"Open Dashboard", "Close"} \\
+        default button "Close" \\
+        with icon note
+      `;
+      
+      // Run in background and handle button clicks
+      setTimeout(() => {
+        try {
+          const result = execSync(`osascript -e '${script}'`, { encoding: 'utf8' }).trim();
+          if (result.includes('Open Dashboard')) {
+            execSync('open https://asanabridge.com/dashboard');
+          }
+        } catch (error) {
+          // User closed dialog or error occurred
+          console.log('Success dialog completed or cancelled');
+        }
+      }, 1000);
+    } catch (error) {
+      console.log('Failed to show success dialog');
+    }
+  }
+
+  private launchMenuBarApp(): void {
+    try {
+      const path = require('path');
+      const statusAppPath = path.join(__dirname, '..', 'AsanaBridgeStatus.app');
+      
+      // Check if the status app exists
+      if (require('fs').existsSync(statusAppPath)) {
+        console.log('🖥️  Launching AsanaBridge Status app...');
+        const { spawn } = require('child_process');
+        
+        // Launch the status app using 'open' command
+        const statusProcess = spawn('open', [statusAppPath], {
+          detached: true,
+          stdio: 'ignore'
+        });
+        
+        statusProcess.unref(); // Don't keep the main process alive for this
+        
+        console.log('✅ AsanaBridge Status app launched');
+      } else {
+        console.log('⚠️  Status app not found, building it...');
+        this.buildStatusApp();
+      }
+    } catch (error) {
+      console.log('Failed to launch status app:', error);
+      // Not critical, continue without status app
+    }
+  }
+
+  private buildStatusApp(): void {
+    try {
+      const path = require('path');
+      const buildScript = path.join(__dirname, '..', 'build-status-app.sh');
+      
+      if (require('fs').existsSync(buildScript)) {
+        console.log('🔨 Building status app...');
+        execSync(`cd "${path.dirname(buildScript)}" && ./build-status-app.sh`, { stdio: 'pipe' });
+        console.log('✅ Status app built successfully');
+        
+        // Try to launch it now
+        setTimeout(() => this.launchMenuBarApp(), 1000);
+      }
+    } catch (error) {
+      console.log('Failed to build status app:', error);
+    }
+  }
+
   private updateMenuBarStatus(status: 'connected' | 'disconnected' | 'syncing' | 'error', message?: string): void {
     try {
       this.connectionStatus = status === 'syncing' ? this.connectionStatus : status;
@@ -138,9 +261,12 @@ Sync in progress: ${this.syncInProgress ? 'Yes' : 'No'}" \\
   async start(): Promise<void> {
     console.log('🚀 Starting AsanaBridge OmniFocus Agent...');
     
-    // Show system notification that agent is starting
-    this.showNotification('AsanaBridge Agent', 'Starting OmniFocus sync agent...');
+    // Show prominent startup notification
+    this.showNotification('AsanaBridge Started', '🚀 AsanaBridge agent is launching and will appear in your menu bar when ready.');
     this.updateMenuBarStatus('disconnected', 'Starting agent...');
+    
+    // Create a temporary visible indicator that the app is running
+    this.showStartupProgress();
     
     try {
       // Test OmniFocus connection
@@ -173,12 +299,18 @@ Sync in progress: ${this.syncInProgress ? 'Yes' : 'No'}" \\
       this.isRunning = true;
       console.log(`✅ Agent running - sync every ${syncInterval} minutes (${serverConfig.plan} plan)`);
       
-      // Show success notification and update status
-      this.showNotification('AsanaBridge Agent', `✅ Agent running! Syncing every ${syncInterval} minutes.`);
+      // Show success notification with clear instructions
+      this.showNotification('AsanaBridge Ready!', `✅ Agent is now running and syncing every ${syncInterval} minutes. Look for the AsanaBridge icon in your menu bar.`);
       this.updateMenuBarStatus('connected', `Ready - syncing every ${syncInterval} minutes`);
+      
+      // Create a prominent success dialog
+      this.showSuccessDialog(syncInterval, serverConfig.plan);
 
       // Set up status popup handler (simulates menu bar click)
       this.setupStatusHandler();
+
+      // Launch menu bar status app
+      this.launchMenuBarApp();
 
       // Initial sync
       await this.performSync();
