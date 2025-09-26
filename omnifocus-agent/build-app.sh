@@ -145,4 +145,8 @@ else
     exit 1
 fi
 
+# Ad-hoc code signing to prevent Gatekeeper issues
+echo "🔐 Code signing app bundle..."
+codesign --force --deep --sign - "$APP_DIR" 2>/dev/null || echo "⚠️  Code signing failed, but continuing..."
+
 echo "🎉 Build complete!"
