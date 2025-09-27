@@ -83,6 +83,14 @@ echo "🎨 Adding app icon..."
 # Set executable permissions
 chmod +x "$APP_PATH/Contents/MacOS/AsanaBridge"
 
+# Code sign with ad-hoc signature to prevent "damaged" errors
+echo "🔐 Code signing app..."
+codesign --force --deep --sign - "$APP_PATH"
+
+# Remove quarantine attribute to prevent Gatekeeper issues
+echo "🔓 Removing quarantine attribute..."
+xattr -cr "$APP_PATH"
+
 echo "✅ Unified AsanaBridge App built successfully!"
 echo "📱 Location: $APP_PATH"
 echo "🔧 Run with: open \"$APP_PATH\""
