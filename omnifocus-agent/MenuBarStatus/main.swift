@@ -1,5 +1,6 @@
 import Cocoa
 import Foundation
+import UserNotifications
 
 class AsanaBridgeMenuBar: NSObject, NSApplicationDelegate {
     var statusItem: NSStatusItem?
@@ -30,9 +31,9 @@ class AsanaBridgeMenuBar: NSObject, NSApplicationDelegate {
         let agentRunning = checkAgentStatus()
         let statusTitle = agentRunning ? "✅ Agent Running" : "❌ Agent Stopped"
         
-        let statusItem = NSMenuItem(title: statusTitle, action: nil, keyEquivalent: "")
-        statusItem.isEnabled = false
-        menu.addItem(statusItem)
+        let statusMenuItem = NSMenuItem(title: statusTitle, action: nil, keyEquivalent: "")
+        statusMenuItem.isEnabled = false
+        menu.addItem(statusMenuItem)
         
         menu.addItem(NSMenuItem.separator())
         
@@ -49,9 +50,9 @@ class AsanaBridgeMenuBar: NSObject, NSApplicationDelegate {
         menu.addItem(NSMenuItem.separator())
         menu.addItem(NSMenuItem(title: "Quit", action: #selector(quit), keyEquivalent: "q"))
         
-        statusItem?.menu = menu
-        statusItem?.button?.performClick(statusItem?.button)
-        statusItem?.menu = nil
+        self.statusItem?.menu = menu
+        self.statusItem?.button?.performClick(self.statusItem?.button)
+        self.statusItem?.menu = nil
     }
     
     func checkAgentStatus() -> Bool {
@@ -122,10 +123,20 @@ class AsanaBridgeMenuBar: NSObject, NSApplicationDelegate {
     }
     
     func showNotification(title: String, message: String) {
-        let notification = NSUserNotification()
-        notification.title = title
-        notification.informativeText = message
-        NSUserNotificationCenter.default.deliver(notification)
+        let center = UNUserNotificationCenter.current()
+        
+        // Request permission first
+        center.requestAuthorization(options: [.alert, .sound]) { granted, error in
+            if granted {
+                let content = UNMutableNotificationContent()
+                content.title = title
+                content.body = message
+                content.sound = .default
+                
+                let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
+                center.add(request)
+            }
+        }
     }
 }
 

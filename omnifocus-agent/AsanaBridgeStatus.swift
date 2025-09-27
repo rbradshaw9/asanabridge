@@ -238,7 +238,7 @@ class AsanaBridgeStatusApp: NSObject, NSApplicationDelegate {
         if let url = URL(string: "https://asanabridge.com/api/health") {
             do {
                 let data = try Data(contentsOf: url)
-                if let response = String(data: data, encoding: .utf8) {
+                if String(data: data, encoding: .utf8) != nil {
                     results.append("✅ Web Service: Accessible")
                 } else {
                     results.append("❌ Web Service: Invalid response")

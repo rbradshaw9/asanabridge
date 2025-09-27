@@ -187,7 +187,7 @@ class MenuBarApp: NSObject {
         updateStatusIcon()
         
         // Update menu if it's currently shown
-        if let menu = statusItem?.menu {
+        if statusItem?.menu != nil {
             statusItem?.menu = createMenu()
         }
     }

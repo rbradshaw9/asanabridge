@@ -283,8 +283,9 @@ router.post('/app-session', async (req: Request, res: Response) => {
       createdAt: new Date()
     });
     
-    // Return session info and auth URL
-    const authUrl = `${req.protocol}://${req.get('host')}/api/auth/app-login?session=${sessionId}`;
+    // Return session info and auth URL (force HTTPS in production)
+    const protocol = req.get('host')?.includes('asanabridge.com') ? 'https' : req.protocol;
+    const authUrl = `${protocol}://${req.get('host')}/api/auth/app-login?session=${sessionId}`;
     
     res.json({
       sessionId,

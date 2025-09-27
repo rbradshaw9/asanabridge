@@ -42,10 +42,14 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate {
     }
     
     func applicationDidFinishLaunching(_ notification: Notification) {
-        NSApp.setActivationPolicy(.regular) // Make it a regular app with dock icon
+        print("🚀 AsanaBridge app launching...")
+        
+        NSApp.setActivationPolicy(.accessory) // Menu bar only, no dock icon
         
         setupMainMenu()
         setupMenuBar()
+        
+        print("✅ AsanaBridge setup complete, showing setup wizard...")
         
         // Always show the setup wizard for now - keep it simple
         showSetupWizard()
@@ -194,8 +198,9 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate {
         // Connect button only shows if not authenticated
         if !asanaConnected {
             let connectButton = NSButton(title: "Connect to AsanaBridge", target: self, action: #selector(connectToAsanaBridge))
-            connectButton.frame = NSRect(x: 300, y: yPos + 10, width: 250, height: 32)
+            connectButton.frame = NSRect(x: 200, y: yPos - 20, width: 200, height: 36)
             connectButton.bezelStyle = .rounded
+            connectButton.font = NSFont.systemFont(ofSize: 14, weight: .medium)
             connectButton.keyEquivalent = "\\r" // Make it the default button
             containerView.addSubview(connectButton)
         }
@@ -238,24 +243,27 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate {
     }
     
     func createStatusIndicator(yPos: Int) -> NSView {
-        let statusView = NSView(frame: NSRect(x: 300, y: yPos, width: 250, height: 30))
+        let statusView = NSView(frame: NSRect(x: 80, y: yPos, width: 440, height: 35))
         
         // Check OmniFocus status
         let isInstalled = isOmniFocusInstalled()
         let isRunning = isOmniFocusRunning()
         
-        // Status circle
-        let circle = NSView(frame: NSRect(x: 0, y: 8, width: 14, height: 14))
+        // Status circle - larger and better positioned
+        let circle = NSView(frame: NSRect(x: 0, y: 10, width: 16, height: 16))
         circle.wantsLayer = true
-        circle.layer?.cornerRadius = 7
+        circle.layer?.cornerRadius = 8
+        circle.layer?.borderWidth = 0.5
+        circle.layer?.borderColor = NSColor.separatorColor.cgColor
         
-        // Status text
+        // Status text - better typography
         let statusLabel = NSTextField(labelWithString: "")
-        statusLabel.font = NSFont.systemFont(ofSize: 13)
-        statusLabel.frame = NSRect(x: 20, y: 5, width: 230, height: 20)
+        statusLabel.font = NSFont.systemFont(ofSize: 14, weight: .medium)
+        statusLabel.frame = NSRect(x: 25, y: 7, width: 410, height: 22)
         statusLabel.isBezeled = false
         statusLabel.isEditable = false
         statusLabel.backgroundColor = .clear
+        statusLabel.alignment = .left
         
         if !isInstalled {
             circle.layer?.backgroundColor = NSColor.systemRed.cgColor
@@ -279,20 +287,23 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate {
     }
     
     func createAsanaStatusIndicator(yPos: Int) -> NSView {
-        let statusView = NSView(frame: NSRect(x: 300, y: yPos, width: 250, height: 30))
+        let statusView = NSView(frame: NSRect(x: 80, y: yPos, width: 440, height: 35))
         
-        // Status circle
-        let circle = NSView(frame: NSRect(x: 0, y: 8, width: 14, height: 14))
+        // Status circle - larger and better positioned
+        let circle = NSView(frame: NSRect(x: 0, y: 10, width: 16, height: 16))
         circle.wantsLayer = true
-        circle.layer?.cornerRadius = 7
+        circle.layer?.cornerRadius = 8
+        circle.layer?.borderWidth = 0.5
+        circle.layer?.borderColor = NSColor.separatorColor.cgColor
         
-        // Status text
+        // Status text - better typography
         let statusLabel = NSTextField(labelWithString: "")
-        statusLabel.font = NSFont.systemFont(ofSize: 13)
-        statusLabel.frame = NSRect(x: 20, y: 5, width: 230, height: 20)
+        statusLabel.font = NSFont.systemFont(ofSize: 14, weight: .medium)
+        statusLabel.frame = NSRect(x: 25, y: 7, width: 410, height: 22)
         statusLabel.isBezeled = false
         statusLabel.isEditable = false
         statusLabel.backgroundColor = .clear
+        statusLabel.alignment = .left
         
         if asanaConnected && userToken != nil {
             circle.layer?.backgroundColor = NSColor.systemGreen.cgColor
@@ -454,10 +465,13 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate {
     }
     
     @objc func connectToAsanaBridge() {
-        startSimplePollingAuth()
+        // Ensure UI operations run on main thread
+        DispatchQueue.main.async {
+            self.startSimplePollingAuth()
+        }
     }
     
-        func startSimplePollingAuth() {
+    func startSimplePollingAuth() {
         let alert = NSAlert()
         alert.messageText = "🚀 Connect to AsanaBridge"
         alert.informativeText = """
@@ -522,42 +536,41 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate {
     }
     
     func showConnectingDialog(sessionId: String) {
-        let alert = NSAlert()
-        alert.messageText = "🌐 Sign In to AsanaBridge"
-        alert.informativeText = """
-        A browser window should have opened.
-        
-        Please:
-        1. Sign in to your AsanaBridge account
-        2. Click "Authorize App"
-        3. This app will connect automatically!
-        
-        Waiting for authorization...
-        """
-        
-        alert.addButton(withTitle: "I'm done - check now")
-        alert.addButton(withTitle: "Open browser again")
-        alert.addButton(withTitle: "Cancel")
-        
-        // Show as non-blocking
-        alert.alertStyle = .informational
-        
-        DispatchQueue.global().async {
+        // Ensure UI operations happen on main thread
+        DispatchQueue.main.async {
+            let alert = NSAlert()
+            alert.messageText = "🌐 Sign In to AsanaBridge"
+            alert.informativeText = """
+            A browser window should have opened.
+            
+            Please:
+            1. Sign in to your AsanaBridge account
+            2. Click "Authorize App"
+            3. This app will connect automatically!
+            
+            Waiting for authorization...
+            """
+            
+            alert.addButton(withTitle: "I'm done - check now")
+            alert.addButton(withTitle: "Open browser again")
+            alert.addButton(withTitle: "Cancel")
+            
+            // Show as informational
+            alert.alertStyle = .informational
+            
             let response = alert.runModal()
             
-            DispatchQueue.main.async {
-                if response == .alertSecondButtonReturn {
-                    // Re-open browser
-                    let authUrl = "https://asanabridge.com/api/auth/app-login?session=\\(sessionId)"
-                    if let url = URL(string: authUrl) {
-                        NSWorkspace.shared.open(url)
-                    }
-                    self.showConnectingDialog(sessionId: sessionId)
-                } else if response == .alertThirdButtonReturn {
-                    // Cancel
-                    self.isAwaitingAuthentication = false
-                    self.updateStatusBarTitle("❌ AsanaBridge")
+            if response == .alertSecondButtonReturn {
+                // Re-open browser
+                let authUrl = "https://asanabridge.com/api/auth/app-login?session=\\(sessionId)"
+                if let url = URL(string: authUrl) {
+                    NSWorkspace.shared.open(url)
                 }
+                self.showConnectingDialog(sessionId: sessionId)
+            } else if response == .alertThirdButtonReturn {
+                // Cancel
+                self.isAwaitingAuthentication = false
+                self.updateStatusBarTitle("❌ AsanaBridge")
             }
         }
     }
@@ -1143,7 +1156,10 @@ class AsanaBridgeAPIClient {
 }
 
 // Main entry point
+print("🔧 Starting AsanaBridge...")
 let app = NSApplication.shared
 let delegate = AsanaBridgeApp()
 app.delegate = delegate
+
+print("📱 Running AsanaBridge app...")
 app.run()

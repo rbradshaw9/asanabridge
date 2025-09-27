@@ -692,81 +692,74 @@ const Dashboard: React.FC = () => {
             </div>
           </div>
 
-          {/* OmniFocus Integration */}
+          {/* macOS Integration */}
           <div className="bg-white/10 backdrop-blur-md rounded-xl p-6 border border-white/20">
-            <div className="flex items-center gap-4 mb-4">
-              <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-purple-700 rounded-lg flex items-center justify-center text-white font-bold text-sm">
-                OF
-              </div>
-              <div className="flex-1">
-                <h3 className="text-xl font-semibold text-white">OmniFocus Agent</h3>
-                <p className="text-gray-400">Desktop sync agent</p>
-              </div>
-              <div className="flex items-center gap-2">
+            {/* Beautiful Apple-Style Status Card */}
+            <div className="mb-6 bg-white/5 backdrop-blur-md rounded-2xl p-6 border border-white/10">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center">
+                    <Calendar className="text-white" size={24} />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold text-white">macOS App</h3>
+                    <p className="text-gray-400 text-sm">Seamless OmniFocus integration</p>
+                  </div>
+                </div>
+                
                 {agentStatus.connected ? (
-                  <>
-                    <CheckCircle className="text-green-400" size={20} />
-                    <span className="text-green-400 text-sm">Connected</span>
-                  </>
-                ) : agentStatus.hasKey ? (
-                  <>
-                    <XCircle className="text-orange-400" size={20} />
-                    <span className="text-orange-400 text-sm">Agent Offline</span>
-                  </>
+                  <div className="flex items-center gap-2 px-3 py-1.5 bg-green-500/20 border border-green-500/30 rounded-full">
+                    <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                    <span className="text-green-300 text-sm font-medium">Connected</span>
+                  </div>
                 ) : (
-                  <>
-                    <XCircle className="text-red-400" size={20} />
-                    <span className="text-red-400 text-sm">Not Setup</span>
-                  </>
+                  <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-500/20 border border-gray-500/30 rounded-full">
+                    <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
+                    <span className="text-gray-400 text-sm font-medium">Not Connected</span>
+                  </div>
                 )}
               </div>
-            </div>
-
-            {agentStatus.connected && agentStatus.version && (
-              <div className="mb-4 bg-green-500/20 border border-green-500/50 rounded-lg p-3 text-green-200 text-sm">
-                Agent v{agentStatus.version} • Last seen: {agentStatus.lastSeen ? new Date(agentStatus.lastSeen).toLocaleString() : 'Unknown'}
-              </div>
-            )}
-
-
-
-            {/* Ultra-Simple Status Display */}
-            {agentStatus.connected ? (
-              <div className="mb-4 p-4 bg-green-500/20 border border-green-500/50 rounded-lg">
-                <div className="flex items-center gap-3">
-                  <div className="w-3 h-3 bg-green-400 rounded-full"></div>
-                  <p className="text-green-200 font-medium">
-                    ✅ macOS App Connected & Syncing
+              
+              {agentStatus.connected ? (
+                <div className="space-y-3">
+                  <p className="text-gray-300 text-sm">
+                    Your tasks are syncing automatically between Asana and OmniFocus.
                   </p>
+                  <div className="flex items-center gap-2 text-green-400 text-sm">
+                    <CheckCircle size={16} />
+                    <span>Real-time synchronization active</span>
+                  </div>
                 </div>
-                <p className="text-green-300 text-sm mt-2 ml-6">
-                  Your tasks are being synced automatically between Asana and OmniFocus.
-                </p>
-              </div>
-            ) : (
-              <div className="mb-4 p-4 bg-blue-500/20 border border-blue-500/50 rounded-lg">
-                <div className="flex items-center gap-3">
-                  <div className="w-3 h-3 bg-blue-400 rounded-full"></div>
-                  <p className="text-blue-200 font-medium">
-                    📱 Ready to Connect
+              ) : (
+                <div className="space-y-4">
+                  <p className="text-gray-300 text-sm">
+                    Connect your Mac to sync tasks automatically with OmniFocus.
                   </p>
+                  
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-3 text-gray-400 text-sm">
+                      <div className="w-6 h-6 bg-blue-500/20 rounded-full flex items-center justify-center text-xs font-semibold text-blue-400">1</div>
+                      <span>Download and install the macOS app</span>
+                    </div>
+                    <div className="flex items-center gap-3 text-gray-400 text-sm">
+                      <div className="w-6 h-6 bg-blue-500/20 rounded-full flex items-center justify-center text-xs font-semibold text-blue-400">2</div>
+                      <span>Open the app and click "Connect"</span>
+                    </div>
+                    <div className="flex items-center gap-3 text-gray-400 text-sm">
+                      <div className="w-6 h-6 bg-blue-500/20 rounded-full flex items-center justify-center text-xs font-semibold text-blue-400">3</div>
+                      <span>Start syncing instantly</span>
+                    </div>
+                  </div>
+                  
+                  <button
+                    onClick={handleDownloadAgent}
+                    className="w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-semibold py-3 px-6 rounded-xl transition duration-200 flex items-center justify-center gap-2 shadow-lg"
+                  >
+                    <Calendar size={18} />
+                    Download for Mac
+                  </button>
                 </div>
-                <p className="text-blue-300 text-sm mt-2 ml-6">
-                  Download the macOS app, open it, and click "Connect to AsanaBridge" - that's it!
-                </p>
-              </div>
-            )}
-            
-            <div className="flex gap-3">
-              <button
-                onClick={handleDownloadAgent}
-                className="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-6 rounded-lg transition duration-200 flex items-center justify-center gap-2"
-              >
-                <Calendar size={18} />
-                Download macOS App
-              </button>
-
-            </div>
+              )}
             
             {/* Installation Instructions */}
             <div className="mt-4 bg-blue-500/20 border border-blue-500/50 rounded-lg p-4">
@@ -780,6 +773,7 @@ const Dashboard: React.FC = () => {
               <p className="text-blue-300 text-xs mt-2">
                 ⚠️ macOS will show a security warning since this app isn't notarized by Apple. This is safe to ignore.
               </p>
+            </div>
             </div>
           </div>
         </div>
