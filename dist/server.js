@@ -19,6 +19,7 @@ const sync_1 = __importDefault(require("./routes/sync"));
 const download_1 = __importDefault(require("./routes/download"));
 const deploy_info_1 = __importDefault(require("./routes/deploy-info"));
 const admin_1 = __importDefault(require("./routes/admin"));
+const support_1 = __importDefault(require("./routes/support"));
 // Load environment variables first
 dotenv_1.default.config();
 const env = (0, env_1.loadEnv)();
@@ -62,8 +63,8 @@ app.use((0, express_session_1.default)({
 // Initialize passport - Temporarily disabled
 // app.use(passport.initialize());
 // app.use(passport.session());
-// Health check
-app.get('/health', async (_req, res) => {
+// Health check endpoints
+const healthCheck = async (_req, res) => {
     try {
         // Check database connection
         await database_1.prisma.$queryRaw `SELECT 1`;
@@ -81,7 +82,7 @@ app.get('/health', async (_req, res) => {
             timestamp: new Date().toISOString(),
             database: 'connected',
             commit: gitCommit,
-            deploymentTest: 'NEW_CODE_MARKER_v2'
+            deploymentTest: 'LATEST_ADMIN_FIXES_v3'
         });
     }
     catch (error) {
@@ -92,7 +93,9 @@ app.get('/health', async (_req, res) => {
             database: 'disconnected'
         });
     }
-});
+};
+app.get('/health', healthCheck);
+app.get('/api/health', healthCheck);
 // Serve static files from public directory (for downloads, etc.)
 app.use('/public', express_1.default.static('public'));
 // Serve React app static files
@@ -105,6 +108,7 @@ app.use('/api/sync', sync_1.default);
 app.use('/api/download', download_1.default);
 app.use('/api/deploy', deploy_info_1.default);
 app.use('/api/admin', admin_1.default);
+app.use('/api/support', support_1.default);
 // Basic API routes (will expand these)
 app.get('/api/status', (_req, res) => {
     res.json({

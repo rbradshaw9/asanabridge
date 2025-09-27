@@ -243,6 +243,66 @@ router.get('/health', authenticateAgent, (_req, res) => {
         timestamp: new Date().toISOString()
     });
 });
+// Get detailed account information for status display
+router.get('/account-info', authenticateAgent, async (req, res) => {
+    try {
+        const setup = req.agentSetup;
+        // Get user information
+        const user = await database_1.prisma.user.findUnique({
+            where: { id: setup.userId },
+            select: {
+                name: true,
+                email: true,
+                plan: true,
+                createdAt: true
+            }
+        });
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+        // Get sync mappings count
+        const mappingsCount = await database_1.prisma.syncMapping.count({
+            where: {
+                userId: setup.userId,
+                isActive: true
+            }
+        });
+        // Get last sync information
+        const lastSync = await database_1.prisma.syncLog.findFirst({
+            where: { userId: setup.userId },
+            orderBy: { createdAt: 'desc' },
+            select: {
+                createdAt: true,
+                status: true,
+                itemssynced: true
+            }
+        });
+        res.json({
+            user: {
+                name: user.name,
+                email: user.email,
+                plan: user.plan,
+                memberSince: user.createdAt.toISOString()
+            },
+            sync: {
+                activeMappings: mappingsCount,
+                lastSync: lastSync ? {
+                    time: lastSync.createdAt.toISOString(),
+                    status: lastSync.status,
+                    itemsSynced: lastSync.itemssynced
+                } : null
+            },
+            agent: {
+                registered: setup.isActive,
+                lastSeen: setup.updatedAt.toISOString()
+            }
+        });
+    }
+    catch (error) {
+        logger_1.logger.error('Failed to get account info', error);
+        res.status(500).json({ error: 'Failed to get account information' });
+    }
+});
 // Generate new agent key for user (authenticated web request)
 router.post('/generate-key', auth_1.authenticateToken, async (req, res) => {
     try {
