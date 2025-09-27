@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { CheckCircle, Circle, ArrowRight, ArrowLeft, X, ExternalLink, Download, Settings, Zap, Key } from 'lucide-react';
+import { CheckCircle, Circle, ArrowRight, ArrowLeft, X, ExternalLink, Download, Settings, Zap } from 'lucide-react';
 
 interface OnboardingStep {
   id: string;
@@ -26,7 +26,7 @@ const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
   syncMappings,
   onClose,
   onConnectAsana,
-  onGenerateAgentKey,
+
   onDownloadAgent,
   onSetupSync
 }) => {
@@ -53,15 +53,9 @@ const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
       isCompleted: syncMappings.length > 0
     },
     {
-      id: 'generate-key',
-      title: 'Generate Agent Key',
-      description: 'Create a secure key for the macOS agent to communicate with AsanaBridge.',
-      isCompleted: agentStatus.hasKey
-    },
-    {
-      id: 'download-agent',
-      title: 'Download macOS Agent',
-      description: 'Download and install the macOS agent to enable OmniFocus integration.',
+      id: 'download-app',
+      title: 'Download macOS App',
+      description: 'Download the app, open it, and click "Connect to AsanaBridge" - that\'s it!',
       isCompleted: agentStatus.connected,
       isOptional: false
     },
@@ -211,78 +205,7 @@ const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
           </div>
         );
 
-      case 'generate-key':
-        return (
-          <div className="py-8">
-            <div className="flex items-center gap-4 mb-6">
-              <div className="w-16 h-16 bg-purple-600/20 rounded-lg flex items-center justify-center">
-                <Settings className="text-purple-400" size={24} />
-              </div>
-              <div>
-                <h3 className="text-2xl font-bold text-white">Generate Agent Key</h3>
-                <p className="text-gray-400">Secure authentication for the macOS agent</p>
-              </div>
-            </div>
-            
-            <div className="bg-slate-800/50 border border-white/10 rounded-lg p-6 mb-6">
-              <h4 className="text-lg font-semibold text-white mb-3 flex items-center gap-2">
-                <Key className="text-blue-400" size={20} />
-                What is an Agent Key?
-              </h4>
-              <div className="space-y-3 text-gray-300 text-sm">
-                <p>
-                  🔐 <strong>Secure Authentication:</strong> The agent key is a unique 64-character token that securely connects the macOS app to your AsanaBridge account without storing your username or password.
-                </p>
-                <p>
-                  🖥️ <strong>Desktop Connection:</strong> When you install the macOS app, it will ask for this key to identify which AsanaBridge account it should sync with.
-                </p>
-                <p>
-                  🔄 <strong>Automatic Sync:</strong> Once configured, the agent runs in the background, automatically syncing tasks between your selected Asana projects and OmniFocus.
-                </p>
-                <p>
-                  👤 <strong>Account-Specific:</strong> Each key is tied to your account and your selected sync projects, ensuring your data stays private and secure.
-                </p>
-              </div>
-            </div>
-
-            {agentStatus.hasKey ? (
-              <div className="bg-green-500/20 border border-green-500/50 rounded-lg p-4 mb-6">
-                <div className="flex items-center gap-3 mb-2">
-                  <CheckCircle className="text-green-400" size={20} />
-                  <span className="text-green-400 font-semibold">Agent Key Generated!</span>
-                </div>
-                <p className="text-green-300 text-sm mb-3">
-                  Your agent key has been generated and is ready to use with the macOS app.
-                </p>
-                <div className="bg-green-600/20 border border-green-500/30 rounded-lg p-3">
-                  <p className="text-green-200 text-sm">
-                    💡 <strong>Next Steps:</strong> Download the macOS app below, install it, and when prompted for the agent key during setup, copy it from your dashboard or regenerate a new one if needed.
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <div className="bg-blue-500/20 border border-blue-500/50 rounded-lg p-4 mb-6">
-                <p className="text-blue-200 mb-4">
-                  Click below to generate your unique agent key. This will enable the macOS app to securely connect to your AsanaBridge account.
-                </p>
-                <div className="bg-yellow-500/20 border border-yellow-500/50 rounded-lg p-3 mb-4">
-                  <p className="text-yellow-200 text-sm">
-                    ⚠️ <strong>Important:</strong> You can always generate a new key from your dashboard if needed. Each new key will replace the previous one.
-                  </p>
-                </div>
-                <button
-                  onClick={onGenerateAgentKey}
-                  className="w-full bg-purple-600 hover:bg-purple-700 text-white font-semibold py-3 px-4 rounded-lg transition duration-200 flex items-center justify-center gap-2"
-                >
-                  <Key size={16} />
-                  Generate Agent Key
-                </button>
-              </div>
-            )}
-          </div>
-        );
-
-      case 'download-agent':
+      case 'download-app':
         return (
           <div className="py-8">
             <div className="flex items-center gap-4 mb-6">
@@ -290,48 +213,61 @@ const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                 <Download className="text-green-400" size={24} />
               </div>
               <div>
-                <h3 className="text-2xl font-bold text-white">Download macOS Agent</h3>
-                <p className="text-gray-400">Install the agent to enable OmniFocus sync</p>
+                <h3 className="text-2xl font-bold text-white">Download macOS App</h3>
+                <p className="text-gray-400">Ultra-simple setup - just download, open, and connect!</p>
               </div>
             </div>
             
             {agentStatus.connected ? (
               <div className="bg-green-500/20 border border-green-500/50 rounded-lg p-4 mb-6">
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 mb-2">
                   <CheckCircle className="text-green-400" size={20} />
-                  <span className="text-green-400 font-semibold">Agent Connected!</span>
+                  <span className="text-green-400 font-semibold">App Connected!</span>
                 </div>
-                <p className="text-green-300 text-sm mt-2">
-                  Your macOS agent is running and ready to sync tasks with OmniFocus.
-                </p>
-              </div>
-            ) : !agentStatus.hasKey ? (
-              <div className="bg-yellow-500/20 border border-yellow-500/50 rounded-lg p-4 mb-6">
-                <p className="text-yellow-200">
-                  You need to generate an agent key first before downloading the agent.
+                <p className="text-green-300 text-sm mb-3">
+                  Your macOS app is connected and ready to sync tasks with OmniFocus.
                 </p>
               </div>
             ) : (
               <div className="bg-blue-500/20 border border-blue-500/50 rounded-lg p-4 mb-6">
-                <p className="text-blue-200 mb-4">
-                  Download and install the macOS agent to enable synchronization with OmniFocus.
-                </p>
-                <div className="bg-gray-500/20 border border-gray-500/50 rounded-lg p-3 mb-4">
-                  <p className="text-gray-300 text-sm">
-                    💡 After installation, the agent will run in the background and sync your tasks automatically.
+                <div className="space-y-4">
+                  <p className="text-blue-200 text-lg font-medium">
+                    � Super Simple Setup
                   </p>
+                  <div className="space-y-3">
+                    <div className="flex items-start gap-3">
+                      <div className="w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-sm font-semibold mt-0.5">1</div>
+                      <p className="text-blue-200 text-sm">Download and install the macOS app</p>
+                    </div>
+                    <div className="flex items-start gap-3">
+                      <div className="w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-sm font-semibold mt-0.5">2</div>
+                      <p className="text-blue-200 text-sm">Open the app (it will show your connection status automatically)</p>
+                    </div>
+                    <div className="flex items-start gap-3">
+                      <div className="w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-sm font-semibold mt-0.5">3</div>
+                      <p className="text-blue-200 text-sm">Click "Connect to AsanaBridge" and you're done!</p>
+                    </div>
+                  </div>
+                  <div className="bg-green-500/20 border border-green-500/50 rounded-lg p-3 mt-4">
+                    <p className="text-green-200 text-sm">
+                      ✨ <strong>No complex setup required!</strong> No keys to copy, no manual configuration - just download and connect.
+                    </p>
+                  </div>
                 </div>
+                
                 <button
                   onClick={onDownloadAgent}
-                  className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-4 rounded-lg transition duration-200 flex items-center justify-center gap-2"
+                  className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-4 rounded-lg transition duration-200 flex items-center justify-center gap-2 mt-6"
                 >
                   <Download size={16} />
-                  Download macOS Agent
+                  Download macOS App
                 </button>
               </div>
             )}
           </div>
         );
+
+
 
       case 'complete':
         return (

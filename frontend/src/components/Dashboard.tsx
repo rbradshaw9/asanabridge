@@ -153,8 +153,7 @@ const Dashboard: React.FC = () => {
   const [showProjectSelection, setShowProjectSelection] = useState(false);
   const [selectedProjects, setSelectedProjects] = useState<string[]>([]);
   const [agentStatus, setAgentStatus] = useState<{connected: boolean, hasKey: boolean, lastSeen?: string, version?: string}>({connected: false, hasKey: false});
-  const [agentKey, setAgentKey] = useState<string>('');
-  const [showAgentKey, setShowAgentKey] = useState(false);
+
   const [planInfo, setPlanInfo] = useState<{
     plan: string;
     currentProjects: number;
@@ -262,25 +261,7 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  const handleGenerateAgentKey = async () => {
-    setLoading(true);
-    setError('');
-    setSuccessMessage('');
-    
-    try {
-      const response = await authApi.generateAgentKey();
-      setAgentKey(response.data.agentKey);
-      setShowAgentKey(true);
-      setSuccessMessage('Agent key generated! Save this key securely - it won\'t be shown again.');
-      
-      // Refresh agent status
-      checkAgentStatus();
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to generate agent key');
-    } finally {
-      setLoading(false);
-    }
-  };
+
 
   const handleSetupSync = () => {
     setShowProjectSelection(true);
@@ -747,83 +728,43 @@ const Dashboard: React.FC = () => {
               </div>
             )}
 
-            {showAgentKey && agentKey && (
-              <div className="mb-4 bg-yellow-500/20 border border-yellow-500/50 rounded-lg p-3">
-                <p className="text-yellow-200 text-sm font-medium mb-2">🔑 Your Agent Key (save this securely):</p>
-                <div className="bg-black/30 rounded p-2 font-mono text-xs text-white break-all">
-                  {agentKey}
-                </div>
-                <button
-                  onClick={() => {
-                    navigator.clipboard.writeText(agentKey);
-                    setSuccessMessage('Agent key copied to clipboard!');
-                  }}
-                  className="mt-2 text-xs text-yellow-300 hover:text-yellow-200"
-                >
-                  📋 Copy to clipboard
-                </button>
-              </div>
-            )}
 
-            {!agentStatus.hasKey ? (
-              <div className="mb-4 p-3 bg-blue-500/20 border border-blue-500/50 rounded-lg">
-                <p className="text-blue-200 text-sm">
-                  � Generate an agent key to connect the OmniFocus sync agent
-                </p>
-              </div>
-            ) : !agentStatus.connected ? (
-              <div className="mb-4 p-3 bg-orange-500/20 border border-orange-500/50 rounded-lg">
-                <p className="text-orange-200 text-sm">
-                  ⏳ Agent key created but agent is not connected. Download and start the agent.
+
+            {/* Ultra-Simple Status Display */}
+            {agentStatus.connected ? (
+              <div className="mb-4 p-4 bg-green-500/20 border border-green-500/50 rounded-lg">
+                <div className="flex items-center gap-3">
+                  <div className="w-3 h-3 bg-green-400 rounded-full"></div>
+                  <p className="text-green-200 font-medium">
+                    ✅ macOS App Connected & Syncing
+                  </p>
+                </div>
+                <p className="text-green-300 text-sm mt-2 ml-6">
+                  Your tasks are being synced automatically between Asana and OmniFocus.
                 </p>
               </div>
             ) : (
-              <div className="mb-4 p-3 bg-green-500/20 border border-green-500/50 rounded-lg">
-                <p className="text-green-200 text-sm">
-                  ✅ Agent is connected and ready to sync tasks!
+              <div className="mb-4 p-4 bg-blue-500/20 border border-blue-500/50 rounded-lg">
+                <div className="flex items-center gap-3">
+                  <div className="w-3 h-3 bg-blue-400 rounded-full"></div>
+                  <p className="text-blue-200 font-medium">
+                    📱 Ready to Connect
+                  </p>
+                </div>
+                <p className="text-blue-300 text-sm mt-2 ml-6">
+                  Download the macOS app, open it, and click "Connect to AsanaBridge" - that's it!
                 </p>
               </div>
             )}
             
             <div className="flex gap-3">
-              {!agentStatus.hasKey ? (
-                <button
-                  onClick={handleGenerateAgentKey}
-                  disabled={loading}
-                  className="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-lg transition duration-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {loading ? (
-                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                  ) : (
-                    <>
-                      <Zap size={16} />
-                      Generate Agent Key
-                    </>
-                  )}
-                </button>
-              ) : (
-                <>
-                  <button
-                    onClick={handleDownloadAgent}
-                    className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition duration-200 flex items-center justify-center gap-2"
-                  >
-                    <Calendar size={16} />
-                    Download Agent
-                  </button>
-                  <button
-                    onClick={handleGenerateAgentKey}
-                    disabled={loading}
-                    className="px-4 py-2 bg-yellow-600/80 hover:bg-yellow-600 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    title="Regenerate Agent Key"
-                  >
-                    {loading ? (
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                    ) : (
-                      <RefreshCw size={16} />
-                    )}
-                  </button>
-                </>
-              )}
+              <button
+                onClick={handleDownloadAgent}
+                className="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-6 rounded-lg transition duration-200 flex items-center justify-center gap-2"
+              >
+                <Calendar size={18} />
+                Download macOS App
+              </button>
 
             </div>
             
@@ -1026,7 +967,7 @@ const Dashboard: React.FC = () => {
           syncMappings={syncMappings}
           onClose={handleCloseOnboarding}
           onConnectAsana={handleAsanaConnect}
-          onGenerateAgentKey={handleGenerateAgentKey}
+          onGenerateAgentKey={() => {}}
           onDownloadAgent={handleDownloadAgent}
           onSetupSync={handleSetupSync}
         />
