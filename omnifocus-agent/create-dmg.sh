@@ -79,12 +79,17 @@ echo "📏 Size: $(du -h "$BUILD_DIR/$DMG_NAME.dmg" | cut -f1)"
 # Clean up temporary DMG directory
 rm -rf "$DMG_DIR"
 
-# Copy DMG to releases directory for git tracking
+# Copy DMG to both public directory (for dashboard downloads) and releases directory (for git tracking)
+PUBLIC_DIR="$PROJECT_DIR/../public"
 RELEASES_DIR="$PROJECT_DIR/../releases/macos"
 mkdir -p "$RELEASES_DIR"
+DMG_PUBLIC_PATH="$PUBLIC_DIR/AsanaBridge-Installer.dmg"
 DMG_FINAL_PATH="$RELEASES_DIR/AsanaBridge-Installer.dmg"
 
-echo "📦 Copying DMG to releases directory..."
+echo "📦 Copying DMG to public directory (for downloads)..."
+cp "$BUILD_DIR/$DMG_NAME.dmg" "$DMG_PUBLIC_PATH"
+
+echo "📦 Copying DMG to releases directory (for git tracking)..."
 cp "$BUILD_DIR/$DMG_NAME.dmg" "$DMG_FINAL_PATH"
 
 echo "✅ DMG created successfully!"
@@ -94,8 +99,8 @@ echo "📏 Size: $(du -h "$DMG_FINAL_PATH" | cut -f1)"
 echo "🎉 DMG installer ready for distribution!"
 echo ""
 echo "📋 Next Steps:"
-echo "1. Add to git: cd .. && git add releases/macos/AsanaBridge-Installer.dmg"
-echo "2. Commit: git commit -m 'Add AsanaBridge DMG installer'"
+echo "1. Add to git: cd .. && git add public/AsanaBridge-Installer.dmg releases/macos/AsanaBridge-Installer.dmg"
+echo "2. Commit: git commit -m 'Update AsanaBridge DMG installer'"
 echo "3. Push: git push origin main"
 echo ""
 echo "⚠️  IMPORTANT: macOS Security Notice"
