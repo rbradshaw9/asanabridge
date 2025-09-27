@@ -139,10 +139,10 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate {
             return
         }
         
-        let windowRect = NSRect(x: 0, y: 0, width: 600, height: 700)
+        let windowRect = NSRect(x: 0, y: 0, width: 650, height: 800)
         setupWindow = NSWindow(
             contentRect: windowRect,
-            styleMask: [.titled, .closable, .resizable],
+            styleMask: [.titled, .closable, .resizable, .miniaturizable],
             backing: .buffered,
             defer: false
         )
@@ -159,164 +159,236 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate {
     }
     
     func createSetupView() -> NSView {
-        let containerView = NSView(frame: NSRect(x: 0, y: 0, width: 600, height: 700))
+        let containerView = NSView(frame: NSRect(x: 0, y: 0, width: 650, height: 800))
         
-        // Header
+        // Header with better spacing
         let headerLabel = NSTextField(labelWithString: "Welcome to AsanaBridge")
-        headerLabel.font = NSFont.boldSystemFont(ofSize: 24)
-        headerLabel.frame = NSRect(x: 50, y: 620, width: 500, height: 40)
+        headerLabel.font = NSFont.boldSystemFont(ofSize: 28)
+        headerLabel.frame = NSRect(x: 40, y: 720, width: 570, height: 50)
         headerLabel.alignment = .center
+        headerLabel.isBezeled = false
+        headerLabel.isEditable = false
+        headerLabel.backgroundColor = .clear
         containerView.addSubview(headerLabel)
         
-        // Subtitle
+        // Subtitle with better typography
         let subtitleLabel = NSTextField(labelWithString: "Connect Asana tasks to OmniFocus automatically")
-        subtitleLabel.font = NSFont.systemFont(ofSize: 16)
+        subtitleLabel.font = NSFont.systemFont(ofSize: 17)
         subtitleLabel.textColor = .secondaryLabelColor
-        subtitleLabel.frame = NSRect(x: 50, y: 590, width: 500, height: 25)
+        subtitleLabel.frame = NSRect(x: 40, y: 680, width: 570, height: 30)
         subtitleLabel.alignment = .center
+        subtitleLabel.isBezeled = false
+        subtitleLabel.isEditable = false
+        subtitleLabel.backgroundColor = .clear
         containerView.addSubview(subtitleLabel)
         
-        // Step 1: OmniFocus Status (Automatic Check)
-        var yPos = 520
-        addSetupStep(to: containerView, step: "1", title: "OmniFocus Status", 
-                    description: "Checking OmniFocus installation automatically...", yPos: &yPos)
+        // Card-like background for steps
+        let cardView = NSView(frame: NSRect(x: 40, y: 200, width: 570, height: 450))
+        cardView.wantsLayer = true
+        cardView.layer?.backgroundColor = NSColor.controlBackgroundColor.cgColor
+        cardView.layer?.cornerRadius = 12
+        cardView.layer?.borderWidth = 1
+        cardView.layer?.borderColor = NSColor.separatorColor.cgColor
+        containerView.addSubview(cardView)
         
-        // Status indicator for OmniFocus
-        let omniFocusStatusView = createStatusIndicator(yPos: yPos + 15)
-        containerView.addSubview(omniFocusStatusView)
+        // Step 1: OmniFocus Status (better spacing)
+        var yPos = 380
+        addSetupStep(to: cardView, step: "1", title: "OmniFocus Detection", 
+                    description: "Automatically checking your OmniFocus installation", yPos: &yPos)
         
-        yPos -= 80
+        // Status indicator for OmniFocus with better positioning
+        let omniFocusStatusView = createStatusIndicator(yPos: yPos - 30)
+        cardView.addSubview(omniFocusStatusView)
+        
+        yPos -= 120
         
         // Step 2: AsanaBridge Connection Status
-        addSetupStep(to: containerView, step: "2", title: "AsanaBridge Connection", 
-                    description: "Your authentication status", yPos: &yPos)
+        addSetupStep(to: cardView, step: "2", title: "AsanaBridge Connection", 
+                    description: "Connect to your AsanaBridge account", yPos: &yPos)
         
         // Status indicator for AsanaBridge
-        let asanaStatusView = createAsanaStatusIndicator(yPos: yPos + 15)
-        containerView.addSubview(asanaStatusView)
+        let asanaStatusView = createAsanaStatusIndicator(yPos: yPos - 30)
+        cardView.addSubview(asanaStatusView)
         
-        // Connect button only shows if not authenticated
+        // Connect button with better styling and positioning
         if !asanaConnected {
             let connectButton = NSButton(title: "Connect to AsanaBridge", target: self, action: #selector(connectToAsanaBridge))
-            connectButton.frame = NSRect(x: 200, y: yPos - 20, width: 200, height: 36)
+            connectButton.frame = NSRect(x: 185, y: yPos - 90, width: 200, height: 44)
             connectButton.bezelStyle = .rounded
-            connectButton.font = NSFont.systemFont(ofSize: 14, weight: .medium)
+            connectButton.font = NSFont.systemFont(ofSize: 15, weight: .semibold)
             connectButton.keyEquivalent = "\\r" // Make it the default button
-            containerView.addSubview(connectButton)
+            connectButton.wantsLayer = true
+            connectButton.layer?.backgroundColor = NSColor.systemBlue.cgColor
+            connectButton.layer?.cornerRadius = 8
+            cardView.addSubview(connectButton)
         }
         
-        yPos -= 100
-        
-        // That's it! No complex setup needed
+        // Footer message
+        let footerLabel = NSTextField(labelWithString: "Your data stays secure - we only sync task information")
+        footerLabel.font = NSFont.systemFont(ofSize: 13)
+        footerLabel.textColor = .tertiaryLabelColor
+        footerLabel.frame = NSRect(x: 40, y: 150, width: 570, height: 30)
+        footerLabel.alignment = .center
+        footerLabel.isBezeled = false
+        footerLabel.isEditable = false
+        footerLabel.backgroundColor = .clear
+        containerView.addSubview(footerLabel)
         
         return containerView
     }
     
     func addSetupStep(to view: NSView, step: String, title: String, description: String, yPos: inout Int) {
-        // Step number circle
-        let stepCircle = NSTextField(labelWithString: step)
-        stepCircle.font = NSFont.boldSystemFont(ofSize: 18)
-        stepCircle.textColor = .white
-        stepCircle.backgroundColor = .systemBlue
-        stepCircle.isBezeled = false
-        stepCircle.isEditable = false
-        stepCircle.alignment = .center
-        stepCircle.frame = NSRect(x: 50, y: yPos, width: 40, height: 40)
+        // Step number circle with better styling
+        let stepCircle = NSView(frame: NSRect(x: 30, y: yPos, width: 36, height: 36))
         stepCircle.wantsLayer = true
-        stepCircle.layer?.cornerRadius = 20
+        stepCircle.layer?.backgroundColor = NSColor.systemBlue.cgColor
+        stepCircle.layer?.cornerRadius = 18
+        
+        let stepLabel = NSTextField(labelWithString: step)
+        stepLabel.font = NSFont.boldSystemFont(ofSize: 16)
+        stepLabel.textColor = .white
+        stepLabel.isBezeled = false
+        stepLabel.isEditable = false
+        stepLabel.backgroundColor = .clear
+        stepLabel.alignment = .center
+        stepLabel.frame = NSRect(x: 0, y: 8, width: 36, height: 20)
+        stepCircle.addSubview(stepLabel)
         view.addSubview(stepCircle)
         
-        // Title
+        // Title with better typography
         let titleLabel = NSTextField(labelWithString: title)
-        titleLabel.font = NSFont.boldSystemFont(ofSize: 16)
-        titleLabel.frame = NSRect(x: 110, y: yPos + 15, width: 400, height: 20)
+        titleLabel.font = NSFont.boldSystemFont(ofSize: 18)
+        titleLabel.frame = NSRect(x: 85, y: yPos + 15, width: 450, height: 25)
+        titleLabel.isBezeled = false
+        titleLabel.isEditable = false
+        titleLabel.backgroundColor = .clear
         view.addSubview(titleLabel)
         
-        // Description
+        // Description with better spacing
         let descLabel = NSTextField(labelWithString: description)
-        descLabel.font = NSFont.systemFont(ofSize: 13)
+        descLabel.font = NSFont.systemFont(ofSize: 14)
         descLabel.textColor = .secondaryLabelColor
-        descLabel.frame = NSRect(x: 110, y: yPos - 5, width: 400, height: 20)
+        descLabel.frame = NSRect(x: 85, y: yPos - 5, width: 450, height: 22)
+        descLabel.isBezeled = false
+        descLabel.isEditable = false
+        descLabel.backgroundColor = .clear
         view.addSubview(descLabel)
         
-        yPos -= 20
+        yPos -= 40
     }
     
     func createStatusIndicator(yPos: Int) -> NSView {
-        let statusView = NSView(frame: NSRect(x: 80, y: yPos, width: 440, height: 35))
+        let statusView = NSView(frame: NSRect(x: 85, y: yPos, width: 450, height: 50))
+        statusView.wantsLayer = true
+        statusView.layer?.backgroundColor = NSColor.quaternarySystemFill.cgColor
+        statusView.layer?.cornerRadius = 8
         
         // Check OmniFocus status
         let isInstalled = isOmniFocusInstalled()
         let isRunning = isOmniFocusRunning()
         
-        // Status circle - larger and better positioned
-        let circle = NSView(frame: NSRect(x: 0, y: 10, width: 16, height: 16))
-        circle.wantsLayer = true
-        circle.layer?.cornerRadius = 8
-        circle.layer?.borderWidth = 0.5
-        circle.layer?.borderColor = NSColor.separatorColor.cgColor
+        // Status icon - larger and better positioned
+        let iconLabel = NSTextField(labelWithString: "")
+        iconLabel.font = NSFont.systemFont(ofSize: 20)
+        iconLabel.frame = NSRect(x: 15, y: 15, width: 30, height: 25)
+        iconLabel.isBezeled = false
+        iconLabel.isEditable = false
+        iconLabel.backgroundColor = .clear
+        iconLabel.alignment = .center
         
-        // Status text - better typography
+        // Status text with better typography and spacing
         let statusLabel = NSTextField(labelWithString: "")
-        statusLabel.font = NSFont.systemFont(ofSize: 14, weight: .medium)
-        statusLabel.frame = NSRect(x: 25, y: 7, width: 410, height: 22)
+        statusLabel.font = NSFont.systemFont(ofSize: 15, weight: .medium)
+        statusLabel.frame = NSRect(x: 55, y: 20, width: 350, height: 20)
         statusLabel.isBezeled = false
         statusLabel.isEditable = false
         statusLabel.backgroundColor = .clear
         statusLabel.alignment = .left
         
+        // Additional info label
+        let infoLabel = NSTextField(labelWithString: "")
+        infoLabel.font = NSFont.systemFont(ofSize: 12)
+        infoLabel.textColor = .secondaryLabelColor
+        infoLabel.frame = NSRect(x: 55, y: 5, width: 350, height: 16)
+        infoLabel.isBezeled = false
+        infoLabel.isEditable = false
+        infoLabel.backgroundColor = .clear
+        infoLabel.alignment = .left
+        
         if !isInstalled {
-            circle.layer?.backgroundColor = NSColor.systemRed.cgColor
-            statusLabel.stringValue = "❌ OmniFocus not installed"
+            iconLabel.stringValue = "❌"
+            statusLabel.stringValue = "OmniFocus not detected"
             statusLabel.textColor = .systemRed
+            infoLabel.stringValue = "Install OmniFocus 3 to continue"
         } else if !isRunning {
-            circle.layer?.backgroundColor = NSColor.systemYellow.cgColor
-            statusLabel.stringValue = "⚠️ OmniFocus installed (not running)"
-            statusLabel.textColor = .systemYellow
+            iconLabel.stringValue = "⚠️"
+            statusLabel.stringValue = "OmniFocus installed"
+            statusLabel.textColor = .systemOrange
+            infoLabel.stringValue = "Launch OmniFocus to activate sync"
         } else {
-            circle.layer?.backgroundColor = NSColor.systemGreen.cgColor
-            statusLabel.stringValue = "✅ OmniFocus connected"
+            iconLabel.stringValue = "✅"
+            statusLabel.stringValue = "OmniFocus connected and ready"
             statusLabel.textColor = .systemGreen
+            infoLabel.stringValue = "Tasks will sync automatically"
             omniFocusConnected = true
         }
         
-        statusView.addSubview(circle)
+        statusView.addSubview(iconLabel)
         statusView.addSubview(statusLabel)
+        statusView.addSubview(infoLabel)
         
         return statusView
     }
     
     func createAsanaStatusIndicator(yPos: Int) -> NSView {
-        let statusView = NSView(frame: NSRect(x: 80, y: yPos, width: 440, height: 35))
+        let statusView = NSView(frame: NSRect(x: 85, y: yPos, width: 450, height: 50))
+        statusView.wantsLayer = true
+        statusView.layer?.backgroundColor = NSColor.quaternarySystemFill.cgColor
+        statusView.layer?.cornerRadius = 8
         
-        // Status circle - larger and better positioned
-        let circle = NSView(frame: NSRect(x: 0, y: 10, width: 16, height: 16))
-        circle.wantsLayer = true
-        circle.layer?.cornerRadius = 8
-        circle.layer?.borderWidth = 0.5
-        circle.layer?.borderColor = NSColor.separatorColor.cgColor
+        // Status icon - larger and better positioned
+        let iconLabel = NSTextField(labelWithString: "")
+        iconLabel.font = NSFont.systemFont(ofSize: 20)
+        iconLabel.frame = NSRect(x: 15, y: 15, width: 30, height: 25)
+        iconLabel.isBezeled = false
+        iconLabel.isEditable = false
+        iconLabel.backgroundColor = .clear
+        iconLabel.alignment = .center
         
-        // Status text - better typography
+        // Status text with better typography and spacing
         let statusLabel = NSTextField(labelWithString: "")
-        statusLabel.font = NSFont.systemFont(ofSize: 14, weight: .medium)
-        statusLabel.frame = NSRect(x: 25, y: 7, width: 410, height: 22)
+        statusLabel.font = NSFont.systemFont(ofSize: 15, weight: .medium)
+        statusLabel.frame = NSRect(x: 55, y: 20, width: 350, height: 20)
         statusLabel.isBezeled = false
         statusLabel.isEditable = false
         statusLabel.backgroundColor = .clear
         statusLabel.alignment = .left
         
+        // Additional info label
+        let infoLabel = NSTextField(labelWithString: "")
+        infoLabel.font = NSFont.systemFont(ofSize: 12)
+        infoLabel.textColor = .secondaryLabelColor
+        infoLabel.frame = NSRect(x: 55, y: 5, width: 350, height: 16)
+        infoLabel.isBezeled = false
+        infoLabel.isEditable = false
+        infoLabel.backgroundColor = .clear
+        infoLabel.alignment = .left
+        
         if asanaConnected && userToken != nil {
-            circle.layer?.backgroundColor = NSColor.systemGreen.cgColor
-            statusLabel.stringValue = "✅ Connected to AsanaBridge"
+            iconLabel.stringValue = "✅"
+            statusLabel.stringValue = "Connected to AsanaBridge"
             statusLabel.textColor = .systemGreen
+            infoLabel.stringValue = "Ready to sync your Asana tasks"
         } else {
-            circle.layer?.backgroundColor = NSColor.systemGray.cgColor
-            statusLabel.stringValue = "⚪ Not connected"
+            iconLabel.stringValue = "⚪"
+            statusLabel.stringValue = "Ready to connect"
             statusLabel.textColor = .secondaryLabelColor
+            infoLabel.stringValue = "Click the button below to authenticate"
         }
         
-        statusView.addSubview(circle)
+        statusView.addSubview(iconLabel)
         statusView.addSubview(statusLabel)
+        statusView.addSubview(infoLabel)
         
         return statusView
     }
