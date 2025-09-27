@@ -35,6 +35,11 @@ class AsanaBridgeAPI {
             nodeVersion: process.version
         });
     }
+    // Get agent configuration based on user's plan
+    async getAgentConfig() {
+        const response = await this.axios.get('/api/agent/config');
+        return response.data;
+    }
     // Get sync mappings for this user
     async getSyncMappings() {
         const response = await this.axios.get('/api/agent/mappings');
