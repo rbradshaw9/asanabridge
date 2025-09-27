@@ -79,7 +79,24 @@ echo "📏 Size: $(du -h "$BUILD_DIR/$DMG_NAME.dmg" | cut -f1)"
 # Clean up temporary DMG directory
 rm -rf "$DMG_DIR"
 
+# Copy DMG to releases directory for git tracking
+RELEASES_DIR="$PROJECT_DIR/../releases/macos"
+mkdir -p "$RELEASES_DIR"
+DMG_FINAL_PATH="$RELEASES_DIR/AsanaBridge-Installer.dmg"
+
+echo "📦 Copying DMG to releases directory..."
+cp "$BUILD_DIR/$DMG_NAME.dmg" "$DMG_FINAL_PATH"
+
+echo "✅ DMG created successfully!"
+echo "📍 Location: $DMG_FINAL_PATH"
+echo "📏 Size: $(du -h "$DMG_FINAL_PATH" | cut -f1)"
+
 echo "🎉 DMG installer ready for distribution!"
+echo ""
+echo "📋 Next Steps:"
+echo "1. Add to git: cd .. && git add releases/macos/AsanaBridge-Installer.dmg"
+echo "2. Commit: git commit -m 'Add AsanaBridge DMG installer'"
+echo "3. Push: git push origin main"
 echo ""
 echo "⚠️  IMPORTANT: macOS Security Notice"
 echo "This app is not notarized by Apple. Users will need to:"
@@ -93,4 +110,4 @@ echo "1. After seeing the security warning, go to:"
 echo "   System Preferences → Security & Privacy → General"
 echo "2. Click 'Open Anyway' next to the AsanaBridge message"
 echo ""
-echo "For testing: open '$BUILD_DIR/$DMG_NAME.dmg'"
+echo "For testing: open '$DMG_FINAL_PATH'"

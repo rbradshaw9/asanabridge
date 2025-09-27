@@ -15,6 +15,13 @@ yarn-error.log*
 dist/
 build/
 
+# Binary releases - ignore everywhere except releases directory
+*.dmg
+*.pkg
+*.app
+!releases/**/*.dmg
+!releases/**/*.pkg
+
 # Logs
 logs/
 *.log
