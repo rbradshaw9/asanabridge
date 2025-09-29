@@ -19,6 +19,11 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate {
     var isAwaitingAuthentication: Bool = false
     var authSessionId: String?
     
+    // UI element references for status updates
+    var asanaStatusIconLabel: NSTextField?
+    var asanaStatusLabel: NSTextField?
+    var asanaStatusInfoLabel: NSTextField?
+    
     enum ConnectionStatus {
         case connecting, connected, disconnected, error
         
@@ -374,6 +379,11 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate {
         infoLabel.backgroundColor = .clear
         infoLabel.alignment = .left
         
+        // Store references for later updates
+        self.asanaStatusIconLabel = iconLabel
+        self.asanaStatusLabel = statusLabel
+        self.asanaStatusInfoLabel = infoLabel
+        
         if asanaConnected && userToken != nil {
             iconLabel.stringValue = "✅"
             statusLabel.stringValue = "Connected to AsanaBridge"
@@ -391,6 +401,26 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate {
         statusView.addSubview(infoLabel)
         
         return statusView
+    }
+    
+    func updateAsanaBridgeStatus(status: ConnectionStatus, message: String) {
+        DispatchQueue.main.async {
+            self.asanaStatusIconLabel?.stringValue = status.icon
+            self.asanaStatusLabel?.stringValue = status.title
+            self.asanaStatusInfoLabel?.stringValue = message
+            
+            // Update text color based on status
+            switch status {
+            case .connected:
+                self.asanaStatusLabel?.textColor = .systemGreen
+            case .connecting:
+                self.asanaStatusLabel?.textColor = .systemBlue
+            case .error:
+                self.asanaStatusLabel?.textColor = .systemRed
+            case .disconnected:
+                self.asanaStatusLabel?.textColor = .secondaryLabelColor
+            }
+        }
     }
     
     @objc func testOmniFocus() {
@@ -539,29 +569,8 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate {
     @objc func connectToAsanaBridge() {
         // Ensure UI operations run on main thread
         DispatchQueue.main.async {
-            self.startSimplePollingAuth()
-        }
-    }
-    
-    func startSimplePollingAuth() {
-        let alert = NSAlert()
-        alert.messageText = "🚀 Connect to AsanaBridge"
-        alert.informativeText = """
-        Ready to connect your AsanaBridge account?
-        
-        This will open your browser where you can:
-        • Sign in to AsanaBridge
-        • Authorize this app
-        • Start syncing automatically!
-        """
-        
-        alert.addButton(withTitle: "Connect Now")
-        alert.addButton(withTitle: "Cancel")
-        
-        let response = alert.runModal()
-        
-        if response == .alertFirstButtonReturn {
-            createAuthSessionAndPoll()
+            // Skip the popup - directly start connection
+            self.createAuthSessionAndPoll()
         }
     }
     
@@ -608,42 +617,10 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate {
     }
     
     func showConnectingDialog(sessionId: String) {
-        // Ensure UI operations happen on main thread
+        // Update the setup window instead of showing a popup
         DispatchQueue.main.async {
-            let alert = NSAlert()
-            alert.messageText = "🌐 Sign In to AsanaBridge"
-            alert.informativeText = """
-            A browser window should have opened.
-            
-            Please:
-            1. Sign in to your AsanaBridge account
-            2. Click "Authorize App"
-            3. This app will connect automatically!
-            
-            Waiting for authorization...
-            """
-            
-            alert.addButton(withTitle: "I'm done - check now")
-            alert.addButton(withTitle: "Open browser again")
-            alert.addButton(withTitle: "Cancel")
-            
-            // Show as informational
-            alert.alertStyle = .informational
-            
-            let response = alert.runModal()
-            
-            if response == .alertSecondButtonReturn {
-                // Re-open browser
-                let authUrl = "https://asanabridge.com/api/auth/app-login?session=\\(sessionId)"
-                if let url = URL(string: authUrl) {
-                    NSWorkspace.shared.open(url)
-                }
-                self.showConnectingDialog(sessionId: sessionId)
-            } else if response == .alertThirdButtonReturn {
-                // Cancel
-                self.isAwaitingAuthentication = false
-                self.updateStatusBarTitle("❌ AsanaBridge")
-            }
+            // Update the AsanaBridge status indicator in the main window
+            self.updateAsanaBridgeStatus(status: .connecting, message: "🌐 Browser opened - please sign in to AsanaBridge and authorize the app. Checking connection...")
         }
     }
     
@@ -666,16 +643,22 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate {
                     self.updateStatusBarTitle("✅ AsanaBridge")
                     
                     DispatchQueue.main.async {
+                        // Update the UI to show connection success
+                        self.updateAsanaBridgeStatus(status: .connected, message: "✅ Successfully connected! Ready to sync your Asana tasks.")
+                        
                         // Auto-complete setup when connected
                         UserDefaults.standard.set(true, forKey: "setupComplete")
                         self.isSetupComplete = true
-                        self.setupWindow?.close()
-                        
-                        self.showAlert(title: "🎉 Setup Complete!", 
-                                     message: "AsanaBridge is connected and ready! Your tasks will sync automatically between Asana and OmniFocus.")
                         
                         // Start the bridge service
                         self.startAsanaBridge()
+                        
+                        // Show success message after a delay, then close setup window
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+                            self.setupWindow?.close()
+                            self.showAlert(title: "🎉 Setup Complete!", 
+                                         message: "AsanaBridge is connected and ready! Your tasks will sync automatically between Asana and OmniFocus.")
+                        }
                     }
                 }
             }
@@ -686,7 +669,7 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate {
             if self.isAwaitingAuthentication {
                 self.isAwaitingAuthentication = false
                 self.updateStatusBarTitle("❌ AsanaBridge")
-                self.showAlert(title: "Timeout", message: "Authorization timed out. Please try again.")
+                self.updateAsanaBridgeStatus(status: .error, message: "⏰ Authorization timed out. Please try connecting again.")
             }
         }
     }
