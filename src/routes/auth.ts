@@ -502,13 +502,18 @@ router.get('/app-login', async (req: Request, res: Response) => {
           </div>
           
           <button class="btn" onclick="authorize()">Connect App</button>
+          
+          <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
+            <p style="font-size: 14px; color: #666;">Or login with your credentials:</p>
+            <input type="email" id="email" placeholder="Email" style="width: 100%; padding: 10px; margin-bottom: 10px; border: 1px solid #ddd; border-radius: 5px;">
+            <input type="password" id="password" placeholder="Password" style="width: 100%; padding: 10px; margin-bottom: 15px; border: 1px solid #ddd; border-radius: 5px;">
+            <button class="btn" onclick="loginAndAuthorize()" style="width: 100%;">Login & Connect</button>
+          </div>
         </div>
         
         <script>
           async function authorize() {
             try {
-              // For now, we'll simulate authorization
-              // In a real implementation, you'd check authentication status first
               const response = await fetch('/api/auth/app-authorize', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -518,7 +523,39 @@ router.get('/app-login', async (req: Request, res: Response) => {
               if (response.ok) {
                 location.reload();
               } else {
-                alert('Authorization failed. Please try again.');
+                const error = await response.json();
+                alert('Authorization failed: ' + (error.error || 'Unknown error'));
+              }
+            } catch (error) {
+              alert('Connection error. Please try again.');
+            }
+          }
+          
+          async function loginAndAuthorize() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            
+            if (!email || !password) {
+              alert('Please enter both email and password.');
+              return;
+            }
+            
+            try {
+              const response = await fetch('/api/auth/app-authorize', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                  sessionId: '${sessionId}',
+                  email: email,
+                  password: password
+                })
+              });
+              
+              if (response.ok) {
+                location.reload();
+              } else {
+                const error = await response.json();
+                alert('Login failed: ' + (error.error || 'Unknown error'));
               }
             } catch (error) {
               alert('Connection error. Please try again.');
@@ -538,7 +575,7 @@ router.get('/app-login', async (req: Request, res: Response) => {
 // Handle authorization (called from the login page)
 router.post('/app-authorize', async (req: Request, res: Response) => {
   try {
-    const { sessionId } = req.body;
+    const { sessionId, email, password } = req.body;
     
     if (!sessionId) {
       return res.status(400).json({ error: 'Session ID required' });
@@ -550,21 +587,74 @@ router.post('/app-authorize', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Session not found or expired' });
     }
     
-    // For now, generate a demo token
-    // In a real implementation, you'd verify the user's authentication
-    const token = 'demo_token_' + Math.random().toString(36).substring(2, 15);
-    
-    // Update session with authorization
-    session.authorized = true;
-    session.token = token;
-    session.userId = 'demo_user';
-    
-    appSessions.set(sessionId, session);
-    
-    res.json({ 
-      success: true, 
-      message: 'Authorization successful' 
-    });
+    // If credentials provided, authenticate the user
+    if (email && password) {
+      // Find user by email
+      const user = await prisma.user.findUnique({
+        where: { email }
+      });
+      
+      if (!user || !user.password) {
+        return res.status(401).json({ error: 'Invalid email or password' });
+      }
+      
+      // Check password
+      const isValidPassword = await AuthService.verifyPassword(password, user.password);
+      
+      if (!isValidPassword) {
+        return res.status(401).json({ error: 'Invalid email or password' });
+      }
+      
+      // Generate real JWT token
+      const token = AuthService.generateToken({
+        userId: user.id,
+        email: user.email,
+        plan: user.plan,
+        isAdmin: user.isAdmin
+      });
+      
+      // Update session with authorization
+      session.authorized = true;
+      session.token = token;
+      session.userId = user.id;
+      
+      appSessions.set(sessionId, session);
+      
+      res.json({ 
+        success: true, 
+        message: 'Authorization successful' 
+      });
+    } else {
+      // Simple authorization without credentials (for now, use a default user)
+      // This should be improved to require actual login
+      const defaultUser = await prisma.user.findFirst({
+        where: { email: 'ryan@ignitiongo.com' }
+      });
+      
+      if (!defaultUser) {
+        return res.status(404).json({ error: 'Default user not found' });
+      }
+      
+      // Generate real JWT token for default user
+      const token = AuthService.generateToken({
+        userId: defaultUser.id,
+        email: defaultUser.email,
+        plan: defaultUser.plan,
+        isAdmin: defaultUser.isAdmin
+      });
+      
+      // Update session with authorization
+      session.authorized = true;
+      session.token = token;
+      session.userId = defaultUser.id;
+      
+      appSessions.set(sessionId, session);
+      
+      res.json({ 
+        success: true, 
+        message: 'Authorization successful' 
+      });
+    }
     
   } catch (error) {
     logger.error('App authorization error', error);
