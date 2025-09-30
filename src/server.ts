@@ -2,11 +2,9 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import path from 'path';
-import session from 'express-session';
 import { loadEnv } from './config/env';
 import { logger } from './config/logger';
 import { prisma } from './config/database';
-// import { passport } from './config/passport'; // Temporarily disabled
 import oauthRoutes from './routes/oauth';
 import authRoutes from './routes/auth';
 import agentRoutes from './routes/agent';
@@ -49,21 +47,6 @@ app.use(cors({
 }));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
-
-// Session middleware for passport
-app.use(session({
-  secret: env.SESSION_SECRET,
-  resave: false,
-  saveUninitialized: false,
-  cookie: {
-    secure: env.NODE_ENV === 'production',
-    maxAge: 24 * 60 * 60 * 1000 // 24 hours
-  }
-}));
-
-// Initialize passport - Temporarily disabled
-// app.use(passport.initialize());
-// app.use(passport.session());
 
 // Health check endpoints
 const healthCheck = async (_req: express.Request, res: express.Response) => {

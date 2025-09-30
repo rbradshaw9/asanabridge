@@ -215,4 +215,206 @@ router.patch('/password', auth_1.authenticateToken, async (req, res) => {
         res.status(500).json({ error: 'Internal server error' });
     }
 });
+// In-memory session storage for app authentication
+const appSessions = new Map();
+// Clean up old sessions every hour
+setInterval(() => {
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+    for (const [sessionId, session] of appSessions.entries()) {
+        if (session.createdAt < oneHourAgo) {
+            appSessions.delete(sessionId);
+        }
+    }
+}, 60 * 60 * 1000);
+// App authentication endpoints for macOS app
+router.post('/app-session', async (req, res) => {
+    try {
+        // Generate a unique session ID
+        const sessionId = Math.random().toString(36).substring(2, 15) +
+            Math.random().toString(36).substring(2, 15);
+        // Store session
+        appSessions.set(sessionId, {
+            id: sessionId,
+            authorized: false,
+            createdAt: new Date()
+        });
+        // Return session info and auth URL (force HTTPS in production)
+        const protocol = req.get('host')?.includes('asanabridge.com') ? 'https' : req.protocol;
+        const authUrl = `${protocol}://${req.get('host')}/api/auth/app-login?session=${sessionId}`;
+        res.json({
+            sessionId,
+            authUrl,
+            message: 'Session created. Please complete authentication in browser.'
+        });
+    }
+    catch (error) {
+        logger_1.logger.error('App session creation error', error);
+        res.status(500).json({ error: 'Failed to create authentication session' });
+    }
+});
+// Check session status (polling endpoint)
+router.get('/app-session', async (req, res) => {
+    try {
+        const sessionId = req.query.session;
+        if (!sessionId) {
+            return res.status(400).json({ error: 'Session ID required' });
+        }
+        const session = appSessions.get(sessionId);
+        if (!session) {
+            return res.status(404).json({ error: 'Session not found or expired' });
+        }
+        if (session.authorized && session.token) {
+            // Clean up the session after successful auth
+            appSessions.delete(sessionId);
+            return res.json({
+                authorized: true,
+                token: session.token,
+                message: 'Authentication successful!'
+            });
+        }
+        res.json({
+            authorized: false,
+            message: 'Waiting for authorization...'
+        });
+    }
+    catch (error) {
+        logger_1.logger.error('App session check error', error);
+        res.status(500).json({ error: 'Failed to check session status' });
+    }
+});
+// App login page and authorization handler
+router.get('/app-login', async (req, res) => {
+    try {
+        const sessionId = req.query.session;
+        if (!sessionId) {
+            return res.status(400).send('Session ID required');
+        }
+        const session = appSessions.get(sessionId);
+        if (!session) {
+            return res.status(404).send('Session not found or expired');
+        }
+        // If already authorized, show success
+        if (session.authorized) {
+            return res.send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>AsanaBridge - Success</title>
+          <meta name="viewport" content="width=device-width, initial-scale=1">
+          <style>
+            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; text-align: center; padding: 50px; background: #f5f5f5; }
+            .container { max-width: 400px; margin: 0 auto; background: white; padding: 40px; border-radius: 10px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
+            .success { color: #4CAF50; font-size: 64px; margin-bottom: 20px; }
+            h1 { color: #333; margin-bottom: 20px; }
+            p { color: #666; line-height: 1.5; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="success">✅</div>
+            <h1>Authentication Successful!</h1>
+            <p>Your AsanaBridge app is now connected. You can close this window and return to the app.</p>
+          </div>
+        </body>
+        </html>
+      `);
+        }
+        // Show login/authorization form
+        res.send(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Connect AsanaBridge App</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; text-align: center; padding: 50px; background: #f5f5f5; }
+          .container { max-width: 400px; margin: 0 auto; background: white; padding: 40px; border-radius: 10px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
+          .logo { font-size: 48px; margin-bottom: 20px; }
+          h1 { color: #333; margin-bottom: 20px; }
+          p { color: #666; line-height: 1.5; margin-bottom: 30px; }
+          .btn { background: #007AFF; color: white; border: none; padding: 12px 24px; border-radius: 8px; font-size: 16px; cursor: pointer; text-decoration: none; display: inline-block; }
+          .btn:hover { background: #0056b3; }
+          .step { margin: 20px 0; padding: 15px; background: #f8f9fa; border-radius: 8px; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="logo">🔗</div>
+          <h1>Connect AsanaBridge App</h1>
+          <p>Authorize your macOS app to sync tasks between Asana and OmniFocus.</p>
+          
+          <div class="step">
+            <strong>Step 1:</strong> Sign in to your AsanaBridge account
+          </div>
+          
+          <div class="step">
+            <strong>Step 2:</strong> Authorize the app connection
+          </div>
+          
+          <div class="step">
+            <strong>Step 3:</strong> Return to your app
+          </div>
+          
+          <button class="btn" onclick="authorize()">Connect App</button>
+        </div>
+        
+        <script>
+          async function authorize() {
+            try {
+              // For now, we'll simulate authorization
+              // In a real implementation, you'd check authentication status first
+              const response = await fetch('/api/auth/app-authorize', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sessionId: '${sessionId}' })
+              });
+              
+              if (response.ok) {
+                location.reload();
+              } else {
+                alert('Authorization failed. Please try again.');
+              }
+            } catch (error) {
+              alert('Connection error. Please try again.');
+            }
+          }
+        </script>
+      </body>
+      </html>
+    `);
+    }
+    catch (error) {
+        logger_1.logger.error('App login page error', error);
+        res.status(500).send('Internal server error');
+    }
+});
+// Handle authorization (called from the login page)
+router.post('/app-authorize', async (req, res) => {
+    try {
+        const { sessionId } = req.body;
+        if (!sessionId) {
+            return res.status(400).json({ error: 'Session ID required' });
+        }
+        const session = appSessions.get(sessionId);
+        if (!session) {
+            return res.status(404).json({ error: 'Session not found or expired' });
+        }
+        // For now, generate a demo token
+        // In a real implementation, you'd verify the user's authentication
+        const token = 'demo_token_' + Math.random().toString(36).substring(2, 15);
+        // Update session with authorization
+        session.authorized = true;
+        session.token = token;
+        session.userId = 'demo_user';
+        appSessions.set(sessionId, session);
+        res.json({
+            success: true,
+            message: 'Authorization successful'
+        });
+    }
+    catch (error) {
+        logger_1.logger.error('App authorization error', error);
+        res.status(500).json({ error: 'Authorization failed' });
+    }
+});
 exports.default = router;

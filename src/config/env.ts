@@ -27,9 +27,6 @@ const envSchema = z.object({
   // Microsoft OAuth
   MICROSOFT_CLIENT_ID: z.string().optional(),
   MICROSOFT_CLIENT_SECRET: z.string().optional(),
-  
-  // Session secret for passport
-  SESSION_SECRET: z.string().min(32).default('your-super-secret-session-key-change-this-in-production'),
 });
 
 export type Env = z.infer<typeof envSchema>;
