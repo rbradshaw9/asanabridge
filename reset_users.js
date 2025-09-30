@@ -64,7 +64,8 @@ async function resetUsers() {
         name: true,
         isAdmin: true,
         plan: true,
-        createdAt: true
+        createdAt: true,
+        password: true
       }
     });
     
