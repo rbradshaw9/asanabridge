@@ -1,5 +1,4 @@
 import { Router, Request, Response } from 'express';
-import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { generateToken, authenticateToken, AuthenticatedRequest, AuthService } from '../services/auth';
 import { logger } from '../config/logger';
@@ -38,7 +37,7 @@ router.post('/register', async (req: Request, res: Response) => {
     }
     
     // Hash password
-    const hashedPassword = await bcrypt.hash(password, 12);
+    const hashedPassword = await AuthService.hashPassword(password);
     
     // Create user
     const user = await prisma.user.create({
@@ -101,7 +100,7 @@ router.post('/login', async (req: Request, res: Response) => {
     }
     
     // Check password
-    const isValidPassword = await bcrypt.compare(password, user.password);
+    const isValidPassword = await AuthService.verifyPassword(password, user.password);
     
     if (!isValidPassword) {
       return res.status(401).json({ error: 'Invalid email or password' });
@@ -228,13 +227,13 @@ router.patch('/password', authenticateToken, async (req: AuthenticatedRequest, r
     }
     
     // Verify current password
-    const isCurrentPasswordValid = await bcrypt.compare(currentPassword, user.password);
+    const isCurrentPasswordValid = await AuthService.verifyPassword(currentPassword, user.password);
     if (!isCurrentPasswordValid) {
       return res.status(400).json({ error: 'Current password is incorrect' });
     }
     
     // Hash new password
-    const hashedNewPassword = await bcrypt.hash(newPassword, 12);
+    const hashedNewPassword = await AuthService.hashPassword(newPassword);
     
     // Update password
     await prisma.user.update({

@@ -4,11 +4,13 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
-const bcrypt_1 = __importDefault(require("bcrypt"));
+const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const auth_1 = require("../services/auth");
 const logger_1 = require("../config/logger");
 const database_1 = require("../config/database");
+const env_1 = require("../config/env");
 const zod_1 = require("zod");
+const env = (0, env_1.loadEnv)();
 const router = (0, express_1.Router)();
 // Validation schemas
 const registerSchema = zod_1.z.object({
@@ -32,7 +34,7 @@ router.post('/register', async (req, res) => {
             return res.status(400).json({ error: 'User with this email already exists' });
         }
         // Hash password
-        const hashedPassword = await bcrypt_1.default.hash(password, 12);
+        const hashedPassword = await auth_1.AuthService.hashPassword(password);
         // Create user
         const user = await database_1.prisma.user.create({
             data: {
@@ -86,7 +88,7 @@ router.post('/login', async (req, res) => {
             return res.status(401).json({ error: 'Invalid email or password' });
         }
         // Check password
-        const isValidPassword = await bcrypt_1.default.compare(password, user.password);
+        const isValidPassword = await auth_1.AuthService.verifyPassword(password, user.password);
         if (!isValidPassword) {
             return res.status(401).json({ error: 'Invalid email or password' });
         }
@@ -194,12 +196,12 @@ router.patch('/password', auth_1.authenticateToken, async (req, res) => {
             return res.status(400).json({ error: 'No password set for this user' });
         }
         // Verify current password
-        const isCurrentPasswordValid = await bcrypt_1.default.compare(currentPassword, user.password);
+        const isCurrentPasswordValid = await auth_1.AuthService.verifyPassword(currentPassword, user.password);
         if (!isCurrentPasswordValid) {
             return res.status(400).json({ error: 'Current password is incorrect' });
         }
         // Hash new password
-        const hashedNewPassword = await bcrypt_1.default.hash(newPassword, 12);
+        const hashedNewPassword = await auth_1.AuthService.hashPassword(newPassword);
         // Update password
         await database_1.prisma.user.update({
             where: { id: req.user.userId },
@@ -217,18 +219,50 @@ router.patch('/password', auth_1.authenticateToken, async (req, res) => {
 });
 // In-memory session storage for app authentication
 const appSessions = new Map();
-// Clean up old sessions every hour
+// Rate limiting for app sessions (per IP)
+const sessionAttempts = new Map();
+// Clean up old sessions and rate limit data every hour
 setInterval(() => {
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+    // Clean up old sessions
     for (const [sessionId, session] of appSessions.entries()) {
         if (session.createdAt < oneHourAgo) {
             appSessions.delete(sessionId);
+        }
+    }
+    // Clean up old rate limit data
+    for (const [ip, data] of sessionAttempts.entries()) {
+        if (data.lastAttempt < oneHourAgo) {
+            sessionAttempts.delete(ip);
         }
     }
 }, 60 * 60 * 1000);
 // App authentication endpoints for macOS app
 router.post('/app-session', async (req, res) => {
     try {
+        const clientIP = req.ip || req.connection.remoteAddress || 'unknown';
+        // Rate limiting: max 10 session creation attempts per hour per IP
+        const attempts = sessionAttempts.get(clientIP);
+        const now = new Date();
+        if (attempts) {
+            const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+            if (attempts.lastAttempt > oneHourAgo && attempts.count >= 10) {
+                return res.status(429).json({
+                    error: 'Too many session creation attempts. Please try again later.'
+                });
+            }
+            if (attempts.lastAttempt > oneHourAgo) {
+                attempts.count += 1;
+                attempts.lastAttempt = now;
+            }
+            else {
+                attempts.count = 1;
+                attempts.lastAttempt = now;
+            }
+        }
+        else {
+            sessionAttempts.set(clientIP, { count: 1, lastAttempt: now });
+        }
         // Generate a unique session ID
         const sessionId = Math.random().toString(36).substring(2, 15) +
             Math.random().toString(36).substring(2, 15);
@@ -256,8 +290,12 @@ router.post('/app-session', async (req, res) => {
 router.get('/app-session', async (req, res) => {
     try {
         const sessionId = req.query.session;
-        if (!sessionId) {
+        if (!sessionId || typeof sessionId !== 'string') {
             return res.status(400).json({ error: 'Session ID required' });
+        }
+        // Validate session ID format (alphanumeric only, reasonable length)
+        if (!/^[a-zA-Z0-9]{10,50}$/.test(sessionId)) {
+            return res.status(400).json({ error: 'Invalid session ID format' });
         }
         const session = appSessions.get(sessionId);
         if (!session) {
@@ -280,6 +318,40 @@ router.get('/app-session', async (req, res) => {
     catch (error) {
         logger_1.logger.error('App session check error', error);
         res.status(500).json({ error: 'Failed to check session status' });
+    }
+});
+// Token validation endpoint for desktop app
+router.get('/validate', async (req, res) => {
+    try {
+        const authHeader = req.headers.authorization;
+        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+            return res.status(401).json({ error: 'No valid authorization header' });
+        }
+        const token = authHeader.substring(7); // Remove 'Bearer ' prefix
+        if (!token || token.length < 10) {
+            return res.status(401).json({ error: 'Invalid token format' });
+        }
+        // Verify JWT token
+        try {
+            const decoded = jsonwebtoken_1.default.verify(token, env.JWT_SECRET);
+            // Check if user still exists
+            const user = await database_1.prisma.user.findUnique({
+                where: { id: decoded.userId },
+                select: { id: true, email: true }
+            });
+            if (!user) {
+                return res.status(401).json({ error: 'User not found' });
+            }
+            res.json({ valid: true, userId: user.id, email: user.email });
+        }
+        catch (jwtError) {
+            logger_1.logger.warn('Invalid JWT token provided', { error: jwtError });
+            res.status(401).json({ error: 'Invalid or expired token' });
+        }
+    }
+    catch (error) {
+        logger_1.logger.error('Token validation error', error);
+        res.status(500).json({ error: 'Token validation failed' });
     }
 });
 // App login page and authorization handler
@@ -417,4 +489,49 @@ router.post('/app-authorize', async (req, res) => {
         res.status(500).json({ error: 'Authorization failed' });
     }
 });
+// App version check endpoint
+router.get('/app/version-check', async (req, res) => {
+    try {
+        const currentVersion = req.query.current;
+        // Current app version info
+        const latestVersion = "2.1.0";
+        const minimumVersion = "2.0.0";
+        const downloadUrl = "https://asanabridge.com/download/latest";
+        // Validate current version format if provided
+        if (currentVersion && !/^\d+\.\d+\.\d+$/.test(currentVersion)) {
+            return res.status(400).json({ error: 'Invalid version format' });
+        }
+        // Compare versions (simple string comparison for semantic versioning)
+        const needsUpdate = currentVersion ? isVersionLower(currentVersion, latestVersion) : true;
+        const isSupported = currentVersion ? !isVersionLower(currentVersion, minimumVersion) : false;
+        res.json({
+            latestVersion,
+            minimumVersion,
+            downloadUrl,
+            needsUpdate,
+            isSupported,
+            releaseNotes: "Enhanced authentication flow, improved error handling, and better system integration",
+            critical: !isSupported, // Force update if below minimum version
+            releaseDate: "2025-09-30"
+        });
+    }
+    catch (error) {
+        logger_1.logger.error('Version check error', error);
+        res.status(500).json({ error: 'Version check failed' });
+    }
+});
+// Helper function to compare semantic versions
+function isVersionLower(version1, version2) {
+    const v1Parts = version1.split('.').map(Number);
+    const v2Parts = version2.split('.').map(Number);
+    for (let i = 0; i < Math.max(v1Parts.length, v2Parts.length); i++) {
+        const v1Part = v1Parts[i] || 0;
+        const v2Part = v2Parts[i] || 0;
+        if (v1Part < v2Part)
+            return true;
+        if (v1Part > v2Part)
+            return false;
+    }
+    return false; // Versions are equal
+}
 exports.default = router;
