@@ -1,9 +1,13 @@
 import { Router, Request, Response } from 'express';
 import bcrypt from 'bcrypt';
+import jwt from 'jsonwebtoken';
 import { generateToken, authenticateToken, AuthenticatedRequest, AuthService } from '../services/auth';
 import { logger } from '../config/logger';
 import { prisma } from '../config/database';
+import { loadEnv } from '../config/env';
 import { z } from 'zod';
+
+const env = loadEnv();
 
 const router = Router();
 
@@ -259,12 +263,24 @@ const appSessions = new Map<string, {
   createdAt: Date 
 }>();
 
-// Clean up old sessions every hour
+// Rate limiting for app sessions (per IP)
+const sessionAttempts = new Map<string, { count: number; lastAttempt: Date }>();
+
+// Clean up old sessions and rate limit data every hour
 setInterval(() => {
   const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+  
+  // Clean up old sessions
   for (const [sessionId, session] of appSessions.entries()) {
     if (session.createdAt < oneHourAgo) {
       appSessions.delete(sessionId);
+    }
+  }
+  
+  // Clean up old rate limit data
+  for (const [ip, data] of sessionAttempts.entries()) {
+    if (data.lastAttempt < oneHourAgo) {
+      sessionAttempts.delete(ip);
     }
   }
 }, 60 * 60 * 1000);
@@ -272,6 +288,31 @@ setInterval(() => {
 // App authentication endpoints for macOS app
 router.post('/app-session', async (req: Request, res: Response) => {
   try {
+    const clientIP = req.ip || req.connection.remoteAddress || 'unknown';
+    
+    // Rate limiting: max 10 session creation attempts per hour per IP
+    const attempts = sessionAttempts.get(clientIP);
+    const now = new Date();
+    
+    if (attempts) {
+      const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+      if (attempts.lastAttempt > oneHourAgo && attempts.count >= 10) {
+        return res.status(429).json({ 
+          error: 'Too many session creation attempts. Please try again later.' 
+        });
+      }
+      
+      if (attempts.lastAttempt > oneHourAgo) {
+        attempts.count += 1;
+        attempts.lastAttempt = now;
+      } else {
+        attempts.count = 1;
+        attempts.lastAttempt = now;
+      }
+    } else {
+      sessionAttempts.set(clientIP, { count: 1, lastAttempt: now });
+    }
+    
     // Generate a unique session ID
     const sessionId = Math.random().toString(36).substring(2, 15) + 
                      Math.random().toString(36).substring(2, 15);
@@ -304,8 +345,13 @@ router.get('/app-session', async (req: Request, res: Response) => {
   try {
     const sessionId = req.query.session as string;
     
-    if (!sessionId) {
+    if (!sessionId || typeof sessionId !== 'string') {
       return res.status(400).json({ error: 'Session ID required' });
+    }
+    
+    // Validate session ID format (alphanumeric only, reasonable length)
+    if (!/^[a-zA-Z0-9]{10,50}$/.test(sessionId)) {
+      return res.status(400).json({ error: 'Invalid session ID format' });
     }
     
     const session = appSessions.get(sessionId);
@@ -333,6 +379,48 @@ router.get('/app-session', async (req: Request, res: Response) => {
   } catch (error) {
     logger.error('App session check error', error);
     res.status(500).json({ error: 'Failed to check session status' });
+  }
+});
+
+// Token validation endpoint for desktop app
+router.get('/validate', async (req: Request, res: Response) => {
+  try {
+    const authHeader = req.headers.authorization;
+    
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'No valid authorization header' });
+    }
+    
+    const token = authHeader.substring(7); // Remove 'Bearer ' prefix
+    
+    if (!token || token.length < 10) {
+      return res.status(401).json({ error: 'Invalid token format' });
+    }
+    
+    // Verify JWT token
+    try {
+      const decoded = jwt.verify(token, env.JWT_SECRET) as any;
+      
+      // Check if user still exists
+      const user = await prisma.user.findUnique({
+        where: { id: decoded.userId },
+        select: { id: true, email: true }
+      });
+      
+      if (!user) {
+        return res.status(401).json({ error: 'User not found' });
+      }
+      
+      res.json({ valid: true, userId: user.id, email: user.email });
+      
+    } catch (jwtError) {
+      logger.warn('Invalid JWT token provided', { error: jwtError });
+      res.status(401).json({ error: 'Invalid or expired token' });
+    }
+    
+  } catch (error) {
+    logger.error('Token validation error', error);
+    res.status(500).json({ error: 'Token validation failed' });
   }
 });
 
@@ -484,5 +572,57 @@ router.post('/app-authorize', async (req: Request, res: Response) => {
     res.status(500).json({ error: 'Authorization failed' });
   }
 });
+
+// App version check endpoint
+router.get('/app/version-check', async (req: Request, res: Response) => {
+  try {
+    const currentVersion = req.query.current as string;
+    
+    // Current app version info
+    const latestVersion = "2.1.0";
+    const minimumVersion = "2.0.0";
+    const downloadUrl = "https://asanabridge.com/download/latest";
+    
+    // Validate current version format if provided
+    if (currentVersion && !/^\d+\.\d+\.\d+$/.test(currentVersion)) {
+      return res.status(400).json({ error: 'Invalid version format' });
+    }
+    
+    // Compare versions (simple string comparison for semantic versioning)
+    const needsUpdate = currentVersion ? isVersionLower(currentVersion, latestVersion) : true;
+    const isSupported = currentVersion ? !isVersionLower(currentVersion, minimumVersion) : false;
+    
+    res.json({
+      latestVersion,
+      minimumVersion,
+      downloadUrl,
+      needsUpdate,
+      isSupported,
+      releaseNotes: "Enhanced authentication flow, improved error handling, and better system integration",
+      critical: !isSupported, // Force update if below minimum version
+      releaseDate: "2025-09-30"
+    });
+    
+  } catch (error) {
+    logger.error('Version check error', error);
+    res.status(500).json({ error: 'Version check failed' });
+  }
+});
+
+// Helper function to compare semantic versions
+function isVersionLower(version1: string, version2: string): boolean {
+  const v1Parts = version1.split('.').map(Number);
+  const v2Parts = version2.split('.').map(Number);
+  
+  for (let i = 0; i < Math.max(v1Parts.length, v2Parts.length); i++) {
+    const v1Part = v1Parts[i] || 0;
+    const v2Part = v2Parts[i] || 0;
+    
+    if (v1Part < v2Part) return true;
+    if (v1Part > v2Part) return false;
+  }
+  
+  return false; // Versions are equal
+}
 
 export default router;

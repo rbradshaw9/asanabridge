@@ -18,6 +18,12 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate {
     // Authentication state
     var isAwaitingAuthentication: Bool = false
     var authSessionId: String?
+    var authPollingTimer: Timer?
+    
+    // Version checking
+    var updateAvailable: Bool = false
+    var latestVersion: String?
+    var isVersionSupported: Bool = true
     
     // UI element references for status updates
     var asanaStatusIconLabel: NSTextField?
@@ -54,10 +60,273 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate {
         setupMainMenu()
         setupMenuBar()
         
+        // Load saved authentication token
+        loadSavedToken()
+        
+        // Set up system event notifications
+        setupSystemNotifications()
+        
+        // Check for app updates
+        checkForUpdates()
+        
         print("✅ AsanaBridge setup complete, showing setup wizard...")
         
         // Always show the setup wizard for now - keep it simple
         showSetupWizard()
+    }
+    
+    func loadSavedToken() {
+        if let savedToken = UserDefaults.standard.string(forKey: "userToken"), !savedToken.isEmpty {
+            print("✅ Found saved authentication token - validating...")
+            userToken = savedToken
+            
+            // Validate token against server
+            validateToken(savedToken) { [weak self] isValid in
+                DispatchQueue.main.async {
+                    if isValid {
+                        self?.asanaConnected = true
+                        self?.updateStatusBarTitle("✅ AsanaBridge")
+                        print("✅ Token validation successful")
+                    } else {
+                        print("❌ Token validation failed - clearing invalid token")
+                        self?.clearTokenAndReset()
+                    }
+                }
+            }
+        } else {
+            print("ℹ️ No saved authentication token found")
+            asanaConnected = false
+            updateStatusBarTitle("❌ AsanaBridge")
+        }
+    }
+    
+    func validateToken(_ token: String, completion: @escaping (Bool) -> Void) {
+        guard let url = URL(string: "https://asanabridge.com/api/auth/validate") else {
+            print("❌ Invalid validation URL")
+            completion(false)
+            return
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.timeoutInterval = 10.0
+        
+        URLSession.shared.dataTask(with: request) { data, response, error in
+            if let error = error {
+                print("❌ Token validation network error: \(error.localizedDescription)")
+                completion(false)
+                return
+            }
+            
+            if let httpResponse = response as? HTTPURLResponse {
+                let isValid = httpResponse.statusCode == 200
+                completion(isValid)
+            } else {
+                completion(false)
+            }
+        }.resume()
+    }
+    
+    func clearTokenAndReset() {
+        userToken = nil
+        UserDefaults.standard.removeObject(forKey: "userToken")
+        UserDefaults.standard.set(false, forKey: "setupComplete")
+        asanaConnected = false
+        isSetupComplete = false
+        updateStatusBarTitle("❌ AsanaBridge")
+    }
+    
+    func checkForUpdates() {
+        guard let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String else {
+            print("⚠️ Could not determine current app version")
+            return
+        }
+        
+        print("🔍 Checking for updates... Current version: \(currentVersion)")
+        
+        guard let url = URL(string: "https://asanabridge.com/api/auth/app/version-check?current=\(currentVersion)") else {
+            print("❌ Invalid version check URL")
+            return
+        }
+        
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 10.0
+        
+        URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
+            if let error = error {
+                let errorCode = (error as NSError).code
+                if errorCode == NSURLErrorTimedOut {
+                    print("⏰ Version check timed out - will retry later")
+                } else if errorCode == NSURLErrorNotConnectedToInternet {
+                    print("📱 No internet connection for version check - will retry when online")
+                } else {
+                    print("❌ Version check network error: \(error.localizedDescription)")
+                }
+                return
+            }
+            
+            // Check HTTP status code
+            if let httpResponse = response as? HTTPURLResponse {
+                if httpResponse.statusCode != 200 {
+                    print("❌ Version check HTTP error: \(httpResponse.statusCode)")
+                    return
+                }
+            }
+            
+            guard let data = data,
+                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                print("❌ Invalid version check response format")
+                return
+            }
+            
+            DispatchQueue.main.async {
+                self?.handleVersionCheckResponse(json)
+            }
+        }.resume()
+    }
+    
+    func handleVersionCheckResponse(_ response: [String: Any]) {
+        guard let latestVersion = response["latestVersion"] as? String,
+              let needsUpdate = response["needsUpdate"] as? Bool,
+              let isSupported = response["isSupported"] as? Bool else {
+            print("❌ Invalid version check response format")
+            return
+        }
+        
+        // Check if this version was previously skipped
+        let skippedVersion = UserDefaults.standard.string(forKey: "skippedVersion")
+        let shouldShowUpdate = needsUpdate && (skippedVersion != latestVersion)
+        
+        self.latestVersion = latestVersion
+        self.updateAvailable = shouldShowUpdate && isSupported
+        self.isVersionSupported = isSupported
+        
+        print("✅ Version check complete - Latest: \(latestVersion), Update needed: \(shouldShowUpdate), Supported: \(isSupported)")
+        
+        // Update menu bar to show update indicator
+        updateMenuBarForVersion()
+        
+        // Handle critical updates (unsupported versions)
+        if !isSupported {
+            let critical = response["critical"] as? Bool ?? false
+            if critical {
+                showCriticalUpdateAlert(latestVersion: latestVersion, downloadUrl: response["downloadUrl"] as? String)
+            }
+        } else if shouldShowUpdate {
+            // Schedule periodic update reminders (non-intrusive)
+            scheduleUpdateReminder()
+        }
+    }
+    
+    func updateMenuBarForVersion() {
+        if updateAvailable {
+            // Add update indicator to menu bar title
+            updateStatusBarTitle(isVersionSupported ? "🔄 AsanaBridge" : "⚠️ AsanaBridge")
+        }
+        
+        // Refresh the menu to show updated version info
+        refreshContextMenu()
+    }
+    
+    func refreshContextMenu() {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self, let statusItem = self.statusItem else { return }
+            
+            // Recreate context menu with current version status
+            let contextMenu = NSMenu()
+            contextMenu.addItem(NSMenuItem(title: "Open AsanaBridge", action: #selector(self.statusItemClicked), keyEquivalent: ""))
+            contextMenu.addItem(NSMenuItem.separator())
+            
+            // Version and update info
+            if let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String {
+                let versionItem = NSMenuItem(title: "Version \(currentVersion)", action: nil, keyEquivalent: "")
+                versionItem.isEnabled = false
+                contextMenu.addItem(versionItem)
+                
+                if self.updateAvailable, let latestVersion = self.latestVersion {
+                    let updateItem = NSMenuItem(title: "🔄 Update to \(latestVersion)", action: #selector(self.downloadUpdate), keyEquivalent: "")
+                    contextMenu.addItem(updateItem)
+                }
+                
+                if !self.isVersionSupported {
+                    let criticalItem = NSMenuItem(title: "⚠️ Critical Update Required", action: #selector(self.downloadUpdate), keyEquivalent: "")
+                    contextMenu.addItem(criticalItem)
+                }
+                
+                contextMenu.addItem(NSMenuItem.separator())
+            }
+            
+            contextMenu.addItem(NSMenuItem(title: "About AsanaBridge", action: #selector(self.showAbout), keyEquivalent: ""))
+            contextMenu.addItem(NSMenuItem(title: "Preferences...", action: #selector(self.showPreferences), keyEquivalent: ""))
+            contextMenu.addItem(NSMenuItem.separator())
+            contextMenu.addItem(NSMenuItem(title: "Quit AsanaBridge", action: #selector(self.quitApp), keyEquivalent: ""))
+            
+            statusItem.menu = contextMenu
+        }
+    }
+    
+    func showCriticalUpdateAlert(latestVersion: String, downloadUrl: String?) {
+        DispatchQueue.main.async {
+            let alert = NSAlert()
+            alert.messageText = "Critical Update Required"
+            alert.informativeText = "Your version of AsanaBridge is no longer supported. Please update to version \(latestVersion) to continue using the app."
+            alert.addButton(withTitle: "Download Update")
+            alert.addButton(withTitle: "Quit App")
+            alert.alertStyle = .critical
+            
+            let response = alert.runModal()
+            if response == .alertFirstButtonReturn {
+                // Open download URL
+                if let urlString = downloadUrl, let url = URL(string: urlString) {
+                    NSWorkspace.shared.open(url)
+                }
+            }
+            // Quit the app regardless of choice for critical updates
+            NSApplication.shared.terminate(nil)
+        }
+    }
+    
+    func scheduleUpdateReminder() {
+        // Show update reminder every 24 hours
+        DispatchQueue.main.asyncAfter(deadline: .now() + 86400) { [weak self] in
+            self?.showUpdateReminder()
+        }
+    }
+    
+    func showUpdateReminder() {
+        guard let latestVersion = latestVersion, updateAvailable else { return }
+        
+        DispatchQueue.main.async {
+            let alert = NSAlert()
+            alert.messageText = "Update Available"
+            alert.informativeText = "AsanaBridge \(latestVersion) is now available with improvements and bug fixes."
+            alert.addButton(withTitle: "Download Update")
+            alert.addButton(withTitle: "Remind Me Later")
+            alert.addButton(withTitle: "Skip This Version")
+            
+            let response = alert.runModal()
+            switch response {
+            case .alertFirstButtonReturn:
+                // Download update
+                if let url = URL(string: "https://asanabridge.com/download/latest") {
+                    NSWorkspace.shared.open(url)
+                }
+            case .alertSecondButtonReturn:
+                // Remind later
+                self.scheduleUpdateReminder()
+            default:
+                // Skip this version
+                UserDefaults.standard.set(latestVersion, forKey: "skippedVersion")
+                self.updateAvailable = false
+                self.updateMenuBarForVersion()
+            }
+        }
+    }
+    
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        // Keep the app running in the menu bar even when all windows are closed
+        return false
     }
     
     func setupMainMenu() {
@@ -79,6 +348,42 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate {
         NSApp.mainMenu = mainMenu
     }
     
+    func setupSystemNotifications() {
+        // Listen for system sleep/wake events
+        NSWorkspace.shared.notificationCenter.addObserver(
+            self,
+            selector: #selector(systemWillSleep),
+            name: NSWorkspace.willSleepNotification,
+            object: nil
+        )
+        
+        NSWorkspace.shared.notificationCenter.addObserver(
+            self,
+            selector: #selector(systemDidWake),
+            name: NSWorkspace.didWakeNotification,
+            object: nil
+        )
+    }
+    
+    @objc func systemWillSleep() {
+        print("💤 System going to sleep - pausing authentication if in progress")
+        if isAwaitingAuthentication {
+            // Pause the polling timer but don't cancel authentication
+            authPollingTimer?.invalidate()
+            authPollingTimer = nil
+        }
+    }
+    
+    @objc func systemDidWake() {
+        print("☀️ System woke up - resuming authentication if needed")
+        if isAwaitingAuthentication, let sessionId = authSessionId {
+            // Resume polling after a brief delay to allow network to stabilize
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
+                self?.startPollingForAuth(sessionId: sessionId)
+            }
+        }
+    }
+    
     func setupMenuBar() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         
@@ -94,6 +399,26 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate {
         let contextMenu = NSMenu()
         contextMenu.addItem(NSMenuItem(title: "Open AsanaBridge", action: #selector(statusItemClicked), keyEquivalent: ""))
         contextMenu.addItem(NSMenuItem.separator())
+        
+        // Version and update info
+        if let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String {
+            let versionItem = NSMenuItem(title: "Version \(currentVersion)", action: nil, keyEquivalent: "")
+            versionItem.isEnabled = false
+            contextMenu.addItem(versionItem)
+            
+            if updateAvailable, let latestVersion = latestVersion {
+                let updateItem = NSMenuItem(title: "🔄 Update to \(latestVersion)", action: #selector(downloadUpdate), keyEquivalent: "")
+                contextMenu.addItem(updateItem)
+            }
+            
+            if !isVersionSupported {
+                let criticalItem = NSMenuItem(title: "⚠️ Critical Update Required", action: #selector(downloadUpdate), keyEquivalent: "")
+                contextMenu.addItem(criticalItem)
+            }
+            
+            contextMenu.addItem(NSMenuItem.separator())
+        }
+        
         contextMenu.addItem(NSMenuItem(title: "About AsanaBridge", action: #selector(showAbout), keyEquivalent: ""))
         contextMenu.addItem(NSMenuItem(title: "Preferences...", action: #selector(showPreferences), keyEquivalent: ""))
         contextMenu.addItem(NSMenuItem.separator())
@@ -575,6 +900,12 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate {
     }
     
     func createAuthSessionAndPoll() {
+        // Prevent multiple simultaneous auth attempts
+        if isAwaitingAuthentication {
+            print("⚠️ Authentication already in progress, ignoring request")
+            return
+        }
+        
         updateStatusBarTitle("🔄 Connecting...")
         
         // Create auth session
@@ -586,13 +917,33 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = 30.0  // 30 second timeout
         
         URLSession.shared.dataTask(with: request) { data, response, error in
             DispatchQueue.main.async {
-                if error != nil {
-                    self.showAlert(title: "Connection Error", message: "Could not connect to AsanaBridge. Please check your internet connection.")
+                if let error = error {
+                    print("❌ Network error creating session: \(error.localizedDescription)")
+                    let errorMessage: String
+                    if (error as NSError).code == NSURLErrorTimedOut {
+                        errorMessage = "Connection timed out. Please check your internet connection and try again."
+                    } else if (error as NSError).code == NSURLErrorNotConnectedToInternet {
+                        errorMessage = "No internet connection. Please check your network settings."
+                    } else {
+                        errorMessage = "Could not connect to AsanaBridge. Please check your internet connection and try again."
+                    }
+                    self.showAlert(title: "Connection Error", message: errorMessage)
                     self.updateStatusBarTitle("❌ AsanaBridge")
                     return
+                }
+                
+                // Check HTTP status code
+                if let httpResponse = response as? HTTPURLResponse {
+                    if httpResponse.statusCode != 200 {
+                        print("❌ HTTP error creating session: \(httpResponse.statusCode)")
+                        self.showAlert(title: "Server Error", message: "Server returned error \(httpResponse.statusCode). Please try again later.")
+                        self.updateStatusBarTitle("❌ AsanaBridge")
+                        return
+                    }
                 }
                 
                 guard let data = data,
@@ -625,20 +976,30 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate {
     }
     
     func startPollingForAuth(sessionId: String) {
+        // Stop any existing timer
+        authPollingTimer?.invalidate()
+        
         isAwaitingAuthentication = true
         
-        Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { timer in
-            if !self.isAwaitingAuthentication {
+        authPollingTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] timer in
+            guard let self = self else {
                 timer.invalidate()
                 return
             }
             
+            if !self.isAwaitingAuthentication {
+                timer.invalidate()
+                self.authPollingTimer = nil
+                return
+            }
+            
             self.checkAuthStatus(sessionId: sessionId) { success, token in
-                if success {
+                if success, let validToken = token, !validToken.isEmpty {
                     timer.invalidate()
+                    self.authPollingTimer = nil
                     self.isAwaitingAuthentication = false
-                    self.userToken = token
-                    UserDefaults.standard.set(token, forKey: "userToken")
+                    self.userToken = validToken
+                    UserDefaults.standard.set(validToken, forKey: "userToken")
                     self.asanaConnected = true
                     self.updateStatusBarTitle("✅ AsanaBridge")
                     
@@ -660,35 +1021,85 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate {
                                          message: "AsanaBridge is connected and ready! Your tasks will sync automatically between Asana and OmniFocus.")
                         }
                     }
+                } else if success && (token == nil || token?.isEmpty == true) {
+                    // Authentication succeeded but no valid token received
+                    print("❌ Authentication succeeded but no valid token received")
+                    timer.invalidate()
+                    self.authPollingTimer = nil
+                    self.isAwaitingAuthentication = false
+                    self.updateStatusBarTitle("❌ AsanaBridge")
+                    DispatchQueue.main.async {
+                        self.updateAsanaBridgeStatus(status: .error, message: "❌ Authentication failed: Invalid token. Please try again.")
+                    }
                 }
+                // If success == false, continue polling (could be temporary network issue)
             }
         }
         
         // Stop polling after 5 minutes
-        DispatchQueue.main.asyncAfter(deadline: .now() + 300) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 300) { [weak self] in
+            guard let self = self else { return }
+            
             if self.isAwaitingAuthentication {
+                self.authPollingTimer?.invalidate()
+                self.authPollingTimer = nil
                 self.isAwaitingAuthentication = false
                 self.updateStatusBarTitle("❌ AsanaBridge")
-                self.updateAsanaBridgeStatus(status: .error, message: "⏰ Authorization timed out. Please try connecting again.")
+                self.updateAsanaBridgeStatus(status: .error, message: "⏰ Authorization timed out. Click the button below to try again.")
             }
         }
     }
     
     func checkAuthStatus(sessionId: String, completion: @escaping (Bool, String?) -> Void) {
-        guard let url = URL(string: "https://asanabridge.com/api/auth/app-session?session=\\(sessionId)") else {
+        guard let url = URL(string: "https://asanabridge.com/api/auth/app-session?session=\(sessionId)") else {
+            print("❌ Invalid session URL")
             completion(false, nil)
             return
         }
         
-        URLSession.shared.dataTask(with: url) { data, response, error in
-            guard let data = data,
-                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 10.0  // Shorter timeout for polling requests
+        
+        URLSession.shared.dataTask(with: request) { data, response, error in
+            // Handle network errors
+            if let error = error {
+                print("❌ Network error checking auth status: \(error.localizedDescription)")
+                completion(false, nil)
+                return
+            }
+            
+            // Handle HTTP errors
+            if let httpResponse = response as? HTTPURLResponse {
+                if httpResponse.statusCode == 404 {
+                    print("⚠️ Session expired or not found")
+                    completion(false, nil)
+                    return
+                } else if httpResponse.statusCode != 200 {
+                    print("❌ HTTP error: \(httpResponse.statusCode)")
+                    completion(false, nil)
+                    return
+                }
+            }
+            
+            // Handle response data
+            guard let data = data else {
+                print("❌ No data received")
+                completion(false, nil)
+                return
+            }
+            
+            guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                print("❌ Invalid JSON response")
                 completion(false, nil)
                 return
             }
             
             let authorized = json["authorized"] as? Bool ?? false
             let token = json["token"] as? String
+            
+            if authorized {
+                print("✅ Authentication successful!")
+            }
             
             completion(authorized, token)
         }.resume()
@@ -1087,29 +1498,56 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate {
         showMainWindow()
     }
     
-    @objc func quitApp() {
-        // Clean shutdown: stop server, save state
-        // localServer?.stop() // HTTPServer doesn't have stop method
-        
-        // Show confirmation if sync is active
-        let alert = NSAlert()
-        alert.messageText = "Quit AsanaBridge?"
-        alert.informativeText = "This will stop syncing tasks between Asana and OmniFocus."
-        alert.addButton(withTitle: "Quit")
-        alert.addButton(withTitle: "Cancel")
-        
-        let response = alert.runModal()
-        if response == .alertFirstButtonReturn {
-            NSApplication.shared.terminate(nil)
+    @objc func downloadUpdate() {
+        if let url = URL(string: "https://asanabridge.com/download/latest") {
+            NSWorkspace.shared.open(url)
         }
     }
     
+    @objc func quitApp() {
+        DispatchQueue.main.async { [weak self] in
+            let alert = NSAlert()
+            alert.messageText = "Quit AsanaBridge?"
+            alert.informativeText = "This will stop syncing tasks between Asana and OmniFocus."
+            alert.addButton(withTitle: "Quit")
+            alert.addButton(withTitle: "Cancel")
+            
+            let response = alert.runModal()
+            if response == .alertFirstButtonReturn {
+                self?.performCleanShutdown()
+            }
+        }
+    }
+    
+    func performCleanShutdown() {
+        print("🛑 Performing clean shutdown...")
+        
+        // Stop authentication polling if in progress
+        authPollingTimer?.invalidate()
+        authPollingTimer = nil
+        isAwaitingAuthentication = false
+        
+        // Remove system observers
+        NSWorkspace.shared.notificationCenter.removeObserver(self)
+        NotificationCenter.default.removeObserver(self)
+        
+        // Save current state
+        if asanaConnected {
+            UserDefaults.standard.set(true, forKey: "setupComplete")
+        }
+        
+        print("✅ Clean shutdown complete")
+        NSApplication.shared.terminate(nil)
+    }
+    
     func showAlert(title: String, message: String) {
-        let alert = NSAlert()
-        alert.messageText = title
-        alert.informativeText = message
-        alert.addButton(withTitle: "OK")
-        alert.runModal()
+        DispatchQueue.main.async {
+            let alert = NSAlert()
+            alert.messageText = title
+            alert.informativeText = message
+            alert.addButton(withTitle: "OK")
+            alert.runModal()
+        }
     }
 }
 
@@ -1207,6 +1645,17 @@ class AsanaBridgeAPIClient {
         return success
     }
     
+    deinit {
+        // Clean up timers and resources
+        authPollingTimer?.invalidate()
+        authPollingTimer = nil
+        
+        // Remove system notification observers
+        NSWorkspace.shared.notificationCenter.removeObserver(self)
+        NotificationCenter.default.removeObserver(self)
+        
+        print("🧹 AsanaBridge app cleaned up")
+    }
 
 }
 
