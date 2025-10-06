@@ -627,6 +627,25 @@ router.get('/app/version-check', async (req, res) => {
         res.status(500).json({ error: 'Version check failed' });
     }
 });
+// Debug endpoint to reset rate limits (remove in production)
+router.post('/debug/reset-rate-limit', async (req, res) => {
+    try {
+        const { ip } = req.body;
+        if (ip) {
+            sessionAttempts.delete(ip);
+            res.json({ message: `Rate limit reset for IP: ${ip}` });
+        }
+        else {
+            // Reset all rate limits
+            sessionAttempts.clear();
+            res.json({ message: 'All rate limits reset' });
+        }
+    }
+    catch (error) {
+        logger_1.logger.error('Rate limit reset error', error);
+        res.status(500).json({ error: 'Failed to reset rate limit' });
+    }
+});
 // Helper function to compare semantic versions
 function isVersionLower(version1, version2) {
     const v1Parts = version1.split('.').map(Number);
