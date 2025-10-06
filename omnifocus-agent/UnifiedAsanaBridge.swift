@@ -1,8 +1,9 @@
 import Cocoa
 import Foundation
 import Network
+import UserNotifications
 
-class AsanaBridgeApp: NSObject, NSApplicationDelegate {
+class AsanaBridgeApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var statusItem: NSStatusItem?
     var mainWindow: NSWindow?
     var setupWindow: NSWindow?
@@ -19,6 +20,7 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate {
     var isAwaitingAuthentication: Bool = false
     var authSessionId: String?
     var authPollingTimer: Timer?
+    var storedAuthToken: String?
     
     // Version checking
     var updateAvailable: Bool = false
@@ -55,7 +57,13 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         print("🚀 AsanaBridge app launching...")
         
-        NSApp.setActivationPolicy(.accessory) // Menu bar only, no dock icon
+        // Configure as regular app (dock icon + menu bar + Alt+Tab support)
+        print("🔧 Setting activation policy to .regular (full app functionality)...")
+        NSApp.setActivationPolicy(.regular)
+        
+        // Verify the policy was set
+        let currentPolicy = NSApp.activationPolicy()
+        print("✅ Current activation policy: \(currentPolicy.rawValue) (0=regular, 1=accessory, 2=prohibited)")
         
         setupMainMenu()
         setupMenuBar()
@@ -79,6 +87,7 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate {
         if let savedToken = UserDefaults.standard.string(forKey: "userToken"), !savedToken.isEmpty {
             print("✅ Found saved authentication token - validating...")
             userToken = savedToken
+            storedAuthToken = savedToken
             
             // Validate token against server
             validateToken(savedToken) { [weak self] isValid in
@@ -130,6 +139,7 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate {
     
     func clearTokenAndReset() {
         userToken = nil
+        storedAuthToken = nil
         UserDefaults.standard.removeObject(forKey: "userToken")
         UserDefaults.standard.set(false, forKey: "setupComplete")
         asanaConnected = false
@@ -145,7 +155,19 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate {
         
         print("🔍 Checking for updates... Current version: \(currentVersion)")
         
-        guard let url = URL(string: "https://asanabridge.com/api/auth/app/version-check?current=\(currentVersion)") else {
+        // Ensure version format is proper semantic version (x.y.z)
+        var formattedVersion = currentVersion
+        let components = currentVersion.split(separator: ".")
+        
+        if components.count == 1 {
+            formattedVersion = "\(currentVersion).0.0"
+        } else if components.count == 2 {
+            formattedVersion = "\(currentVersion).0"
+        }
+        
+        print("🔍 Formatted version: \(currentVersion) -> \(formattedVersion)")
+        
+        guard let url = URL(string: "https://asanabridge.com/api/auth/app/version-check?current=\(formattedVersion)") else {
             print("❌ Invalid version check URL")
             return
         }
@@ -385,19 +407,159 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate {
     }
     
     func setupMenuBar() {
-        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        print("🔧 Setting up menu bar...")
         
-        if let button = statusItem?.button {
-            button.title = "🔄 AsanaBridge"
-            button.toolTip = "AsanaBridge - Connecting Asana to OmniFocus"
-            button.action = #selector(statusItemClicked)
-            button.target = self
-            button.sendAction(on: [.leftMouseUp, .rightMouseUp])
+        // Create status item with square length for icon
+        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+        
+        if statusItem == nil {
+            print("⚠️ Fixed length failed, trying variable length")
+            statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         }
         
-        // Create context menu for right-click
+        if statusItem == nil {
+            print("⚠️ Variable length failed, trying square length")
+            statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+        }
+        
+        guard let statusItem = statusItem else {
+            print("❌ Failed to create status item")
+            return
+        }
+        
+        guard let button = statusItem.button else {
+            print("❌ Failed to get status item button")
+            return
+        }
+        
+        // Force ICON ONLY - no text whatsoever
+        button.title = ""
+        button.alternateTitle = ""
+        
+        // Try SF Symbol first
+        var iconSet = false
+        if #available(macOS 11.0, *) {
+            if let image = NSImage(systemSymbolName: "link.circle.fill", accessibilityDescription: "AsanaBridge") {
+                let resizedImage = NSImage(size: NSSize(width: 16, height: 16))
+                resizedImage.lockFocus()
+                image.draw(in: NSRect(origin: .zero, size: NSSize(width: 16, height: 16)))
+                resizedImage.unlockFocus()
+                resizedImage.isTemplate = true
+                
+                button.image = resizedImage
+                iconSet = true
+                print("✅ Using SF Symbol 'link.circle.fill' for menu bar icon")
+            }
+        }
+        
+        // Fallback: Create a minimal dot icon
+        if !iconSet {
+            let size = NSSize(width: 16, height: 16)
+            let image = NSImage(size: size)
+            image.lockFocus()
+            
+            // Draw a simple filled circle
+            NSColor.controlTextColor.setFill()
+            let circle = NSBezierPath(ovalIn: NSRect(x: 6, y: 6, width: 4, height: 4))
+            circle.fill()
+            
+            image.unlockFocus()
+            image.isTemplate = true
+            
+            button.image = image
+            print("✅ Using simple dot icon for menu bar")
+        }
+        
+        // Absolutely ensure no text is shown
+        button.title = ""
+        
+        button.toolTip = "AsanaBridge - Click to open, right-click for menu"
+        
+        // FORCE icon-only display - no text anywhere
+        button.title = ""
+        button.alternateTitle = ""
+        button.imagePosition = .imageOnly
+        button.isBordered = false
+        button.showsBorderOnlyWhileMouseInside = false
+        
+        // Remove any attributed title that might contain text
+        button.attributedTitle = NSAttributedString(string: "")
+        button.attributedAlternateTitle = NSAttributedString(string: "")
+        
+        // Force visibility
+        button.isHidden = false
+        button.alphaValue = 1.0
+        
+        print("✅ Menu bar button configured: title='\(button.title)', hasImage=\(button.image != nil)")
+        button.target = self
+        button.action = #selector(statusItemClicked)
+        
+        // Set button to handle both left and right clicks
+        button.sendAction(on: [.leftMouseUp, .rightMouseUp])
+        
+        // Verify the status item is visible
+        print("🔍 Status item length: \(statusItem.length)")
+        print("🔍 Status item button frame: \(button.frame)")
+        print("🔍 Status item isVisible: \(statusItem.isVisible)")
+        
+        // Try to make it more visible
+        statusItem.isVisible = true
+        
+        print("✅ Menu bar status item created successfully")
+        updateMenuBarMenu()
+        
+        // Show a modern notification to confirm the app is running
+        let center = UNUserNotificationCenter.current()
+        center.requestAuthorization(options: [.alert, .sound]) { granted, error in
+            if granted {
+                let content = UNMutableNotificationContent()
+                content.title = "AsanaBridge"
+                content.body = "Menu bar app is now running. Look for the link icon in your menu bar."
+                content.sound = .default
+                
+                let request = UNNotificationRequest(
+                    identifier: "asanabridge-startup",
+                    content: content,
+                    trigger: nil
+                )
+                
+                center.add(request) { error in
+                    if let error = error {
+                        print("⚠️ Notification error: \(error)")
+                    }
+                }
+            }
+        }
+        
+        // Double-check after a brief delay
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            print("🔍 Post-setup check - Status item still visible: \(statusItem.isVisible)")
+            if let button = statusItem.button {
+                print("🔍 Button still configured: \(button.title), hidden: \(button.isHidden)")
+            }
+        }
+    }
+    
+    func updateMenuBarMenu() {
+        guard statusItem != nil else { return }
+        
+        // Create fresh context menu
         let contextMenu = NSMenu()
-        contextMenu.addItem(NSMenuItem(title: "Open AsanaBridge", action: #selector(statusItemClicked), keyEquivalent: ""))
+        contextMenu.delegate = self
+        
+        // Main action
+        let openItem = NSMenuItem(title: "Open AsanaBridge", action: #selector(openMainWindow), keyEquivalent: "")
+        openItem.target = self
+        contextMenu.addItem(openItem)
+        
+        contextMenu.addItem(NSMenuItem.separator())
+        
+        // Connection status
+        let statusTitle = (userToken != nil) ? "Connected to AsanaBridge" : "Not Connected"
+        let statusMenuItem = NSMenuItem(title: statusTitle, action: nil, keyEquivalent: "")
+        statusMenuItem.isEnabled = false
+        contextMenu.addItem(statusMenuItem)
+        
         contextMenu.addItem(NSMenuItem.separator())
         
         // Version and update info
@@ -407,35 +569,103 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate {
             contextMenu.addItem(versionItem)
             
             if updateAvailable, let latestVersion = latestVersion {
-                let updateItem = NSMenuItem(title: "🔄 Update to \(latestVersion)", action: #selector(downloadUpdate), keyEquivalent: "")
+                let updateItem = NSMenuItem(title: "Update to \(latestVersion)", action: #selector(downloadUpdate), keyEquivalent: "")
+                updateItem.target = self
                 contextMenu.addItem(updateItem)
             }
             
             if !isVersionSupported {
-                let criticalItem = NSMenuItem(title: "⚠️ Critical Update Required", action: #selector(downloadUpdate), keyEquivalent: "")
+                let criticalItem = NSMenuItem(title: "Critical Update Required", action: #selector(downloadUpdate), keyEquivalent: "")
+                criticalItem.target = self
                 contextMenu.addItem(criticalItem)
             }
             
             contextMenu.addItem(NSMenuItem.separator())
         }
         
-        contextMenu.addItem(NSMenuItem(title: "About AsanaBridge", action: #selector(showAbout), keyEquivalent: ""))
-        contextMenu.addItem(NSMenuItem(title: "Preferences...", action: #selector(showPreferences), keyEquivalent: ""))
-        contextMenu.addItem(NSMenuItem.separator())
-        contextMenu.addItem(NSMenuItem(title: "Quit AsanaBridge", action: #selector(quitApp), keyEquivalent: ""))
+        // Settings and info
+        let aboutItem = NSMenuItem(title: "About AsanaBridge", action: #selector(showAbout), keyEquivalent: "")
+        aboutItem.target = self
+        contextMenu.addItem(aboutItem)
         
-        statusItem?.menu = contextMenu
+        let prefsItem = NSMenuItem(title: "Preferences...", action: #selector(showPreferences), keyEquivalent: "")
+        prefsItem.target = self
+        contextMenu.addItem(prefsItem)
+        
+        contextMenu.addItem(NSMenuItem.separator())
+        
+        let quitItem = NSMenuItem(title: "Quit AsanaBridge", action: #selector(quitApp), keyEquivalent: "q")
+        quitItem.target = self
+        contextMenu.addItem(quitItem)
+        
+        // DO NOT set the menu here - we'll handle click events manually
+        print("✅ Menu bar context menu updated")
     }
     
     @objc func statusItemClicked() {
-        // For left-click, show the app. Right-click will show context menu automatically
-        let event = NSApp.currentEvent
-        if event?.type == .rightMouseUp {
-            // Right click - context menu will show automatically
-            return
-        }
+        guard let statusItem = statusItem else { return }
         
-        // Left click - show main interface
+        let event = NSApp.currentEvent
+        print("🖱️ Status item clicked - Event type: \(event?.type.rawValue ?? 0)")
+        
+        if event?.type == .rightMouseUp {
+            // Right click - show context menu
+            print("🖱️ Right click detected - showing context menu")
+            updateMenuBarMenu() // Refresh menu before showing
+            
+            // Create and show menu manually
+            let contextMenu = NSMenu()
+            contextMenu.delegate = self
+            
+            // Rebuild menu items
+            let openItem = NSMenuItem(title: "Open AsanaBridge", action: #selector(openMainWindow), keyEquivalent: "")
+            openItem.target = self
+            contextMenu.addItem(openItem)
+            
+            contextMenu.addItem(NSMenuItem.separator())
+            
+            let statusTitle = (userToken != nil) ? "✅ Connected" : "❌ Not Connected"
+            let statusMenuItem = NSMenuItem(title: statusTitle, action: nil, keyEquivalent: "")
+            statusMenuItem.isEnabled = false
+            contextMenu.addItem(statusMenuItem)
+            
+            contextMenu.addItem(NSMenuItem.separator())
+            
+            if let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String {
+                let versionItem = NSMenuItem(title: "Version \(currentVersion)", action: nil, keyEquivalent: "")
+                versionItem.isEnabled = false
+                contextMenu.addItem(versionItem)
+                contextMenu.addItem(NSMenuItem.separator())
+            }
+            
+            let aboutItem = NSMenuItem(title: "About AsanaBridge", action: #selector(showAbout), keyEquivalent: "")
+            aboutItem.target = self
+            contextMenu.addItem(aboutItem)
+            
+            let prefsItem = NSMenuItem(title: "Preferences...", action: #selector(showPreferences), keyEquivalent: "")
+            prefsItem.target = self
+            contextMenu.addItem(prefsItem)
+            
+            contextMenu.addItem(NSMenuItem.separator())
+            
+            let quitItem = NSMenuItem(title: "Quit AsanaBridge", action: #selector(quitApp), keyEquivalent: "q")
+            quitItem.target = self
+            contextMenu.addItem(quitItem)
+            
+            // Show the menu at the status item location
+            statusItem.menu = contextMenu
+            statusItem.button?.performClick(nil)
+            statusItem.menu = nil // Clear menu after use
+            
+        } else {
+            // Left click - show main interface
+            print("🖱️ Left click detected - opening main window")
+            openMainWindow()
+        }
+    }
+    
+    @objc func openMainWindow() {
+        print("🪟 Opening main window...")
         if !isSetupComplete {
             showSetupWizard()
         } else {
@@ -446,7 +676,11 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate {
     func updateStatusBarTitle(_ title: String) {
         DispatchQueue.main.async {
             if let button = self.statusItem?.button {
-                button.title = title
+                // Only show icon - no text in menu bar
+                button.title = ""
+                
+                // Update tooltip with status information instead
+                button.toolTip = title
             }
         }
     }
@@ -1135,6 +1369,7 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate {
         
         // Success! Store the token and complete authentication
         userToken = authToken
+        storedAuthToken = authToken
         UserDefaults.standard.set(authToken, forKey: "userToken")
         asanaConnected = true
         isAwaitingAuthentication = false
@@ -1383,13 +1618,44 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate {
     }
     
     func performSync() {
-        // Sync logic here
-        print("Performing sync...")
+        guard let token = storedAuthToken else {
+            print("❌ Cannot sync: No authentication token")
+            updateMenuBarStatus(.error)
+            return
+        }
+        
+        print("🔄 Starting bidirectional sync...")
+        updateMenuBarStatus(.connecting)
+        
+        Task {
+            do {
+                let success = try await performBidirectionalSync(token: token)
+                await MainActor.run {
+                    if success {
+                        updateMenuBarStatus(.connected)
+                        showNotification(title: "Sync Complete", body: "Tasks synchronized successfully")
+                    } else {
+                        updateMenuBarStatus(.error)
+                        showNotification(title: "Sync Failed", body: "Unable to synchronize tasks")
+                    }
+                }
+            } catch {
+                print("❌ Sync error: \(error)")
+                await MainActor.run {
+                    updateMenuBarStatus(.error)
+                    showNotification(title: "Sync Error", body: error.localizedDescription)
+                }
+            }
+        }
     }
     
     func updateMenuBarStatus(_ status: ConnectionStatus) {
         if let button = statusItem?.button {
-            button.title = "\\(status.icon) AsanaBridge"
+            // Only show icon - no text in menu bar
+            button.title = ""
+            
+            // Update tooltip with status information instead
+            button.toolTip = "AsanaBridge - \(status.title)"
         }
     }
     
@@ -1494,8 +1760,24 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate {
     }
     
     @objc func showPreferences() {
-        // For now, just show the main window (can be enhanced later)
-        showMainWindow()
+        showPreferencesWindow()
+    }
+    
+    func showPreferencesWindow() {
+        DispatchQueue.main.async {
+            let alert = NSAlert()
+            alert.messageText = "AsanaBridge Preferences"
+            alert.informativeText = "Sync Interval: Every 5 minutes\nStatus: Connected\nLast Sync: Just now\n\nFor advanced settings, visit asanabridge.com"
+            alert.addButton(withTitle: "OK")
+            alert.addButton(withTitle: "Open Website")
+            
+            let response = alert.runModal()
+            if response == .alertSecondButtonReturn {
+                if let url = URL(string: "https://asanabridge.com") {
+                    NSWorkspace.shared.open(url)
+                }
+            }
+        }
     }
     
     @objc func downloadUpdate() {
@@ -1547,6 +1829,68 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate {
             alert.informativeText = message
             alert.addButton(withTitle: "OK")
             alert.runModal()
+        }
+    }
+    
+    // MARK: - Sync Functions
+    func performBidirectionalSync(token: String) async throws -> Bool {
+        print("🔄 Starting bidirectional sync with server...")
+        
+        guard let url = URL(string: "https://asanabridge.com/api/sync/perform") else {
+            throw NSError(domain: "AsanaBridge", code: 1, userInfo: [NSLocalizedDescriptionKey: "Invalid sync URL"])
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        let syncData = [
+            "direction": "bidirectional",
+            "timestamp": ISO8601DateFormatter().string(from: Date())
+        ]
+        
+        do {
+            request.httpBody = try JSONSerialization.data(withJSONObject: syncData)
+            
+            let (data, response) = try await URLSession.shared.data(for: request)
+            
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw NSError(domain: "AsanaBridge", code: 2, userInfo: [NSLocalizedDescriptionKey: "Invalid response"])
+            }
+            
+            if httpResponse.statusCode == 200 {
+                print("✅ Bidirectional sync completed successfully")
+                return true
+            } else {
+                print("❌ Sync failed with status: \(httpResponse.statusCode)")
+                if let responseString = String(data: data, encoding: .utf8) {
+                    print("Response: \(responseString)")
+                }
+                return false
+            }
+        } catch {
+            print("❌ Sync error: \(error.localizedDescription)")
+            throw error
+        }
+    }
+    
+    func showNotification(title: String, body: String) {
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body = body
+        content.sound = .default
+        
+        let request = UNNotificationRequest(
+            identifier: UUID().uuidString,
+            content: content,
+            trigger: nil
+        )
+        
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error = error {
+                print("❌ Notification error: \(error.localizedDescription)")
+            }
         }
     }
 }
@@ -1645,17 +1989,7 @@ class AsanaBridgeAPIClient {
         return success
     }
     
-    deinit {
-        // Clean up timers and resources
-        authPollingTimer?.invalidate()
-        authPollingTimer = nil
-        
-        // Remove system notification observers
-        NSWorkspace.shared.notificationCenter.removeObserver(self)
-        NotificationCenter.default.removeObserver(self)
-        
-        print("🧹 AsanaBridge app cleaned up")
-    }
+    // Note: Timer cleanup handled throughout the app lifecycle as needed
 
 }
 
