@@ -600,10 +600,11 @@ router.post('/app-authorize', async (req, res) => {
 router.get('/app/version-check', async (req, res) => {
     try {
         const currentVersion = req.query.current;
-        // Current app version info
+        // Current app version info - easily updatable
         const latestVersion = "2.1.0";
         const minimumVersion = "2.0.0";
-        const downloadUrl = "https://asanabridge.com/download/latest";
+        const downloadUrl = "https://asanabridge.com/api/auth/app/download/latest";
+        const fileSize = 25000000; // ~25MB
         // Validate current version format if provided
         if (currentVersion && !/^\d+\.\d+\.\d+$/.test(currentVersion)) {
             return res.status(400).json({ error: 'Invalid version format' });
@@ -619,12 +620,104 @@ router.get('/app/version-check', async (req, res) => {
             isSupported,
             releaseNotes: "Enhanced authentication flow, improved error handling, and better system integration",
             critical: !isSupported, // Force update if below minimum version
-            releaseDate: "2025-09-30"
+            releaseDate: "2025-10-06",
+            fileSize,
+            changelog: [
+                "🔧 Fixed menu bar icon visibility issues",
+                "✅ Improved authentication reliability",
+                "🚀 Added automatic update checking",
+                "🔐 Enhanced security and error handling"
+            ]
         });
     }
     catch (error) {
         logger_1.logger.error('Version check error', error);
         res.status(500).json({ error: 'Version check failed' });
+    }
+});
+// App download endpoint
+router.get('/app/download/latest', async (req, res) => {
+    try {
+        const userAgent = req.get('User-Agent') || 'unknown';
+        const clientIP = req.ip || req.connection.remoteAddress || 'unknown';
+        // Log download analytics
+        logger_1.logger.info('App download requested', {
+            ip: clientIP,
+            userAgent,
+            version: '2.1.0',
+            timestamp: new Date().toISOString()
+        });
+        // In production, this would serve the actual .dmg file
+        // For now, redirect to a placeholder or serve from storage
+        const downloadPath = '/path/to/AsanaBridge-2.1.0.dmg';
+        // Set appropriate headers for file download
+        res.setHeader('Content-Type', 'application/x-apple-diskimage');
+        res.setHeader('Content-Disposition', 'attachment; filename="AsanaBridge-2.1.0.dmg"');
+        res.setHeader('Content-Length', '25000000'); // ~25MB
+        // In production, stream the file:
+        // res.sendFile(downloadPath);
+        // For development, return download info
+        res.json({
+            message: 'Download would start here',
+            filename: 'AsanaBridge-2.1.0.dmg',
+            version: '2.1.0',
+            size: 25000000,
+            downloadPath
+        });
+    }
+    catch (error) {
+        logger_1.logger.error('App download error', error);
+        res.status(500).json({ error: 'Download failed' });
+    }
+});
+// Update changelog endpoint
+router.get('/app/changelog/:version?', async (req, res) => {
+    try {
+        const version = req.params.version || 'latest';
+        // Version changelog database (in production, store in database)
+        const changelogs = {
+            '2.1.0': {
+                version: '2.1.0',
+                releaseDate: '2025-10-06',
+                critical: false,
+                features: [
+                    '🔧 Fixed menu bar icon visibility issues',
+                    '✅ Improved authentication reliability',
+                    '🚀 Added automatic update checking',
+                    '🔐 Enhanced security and error handling',
+                    '📱 Better Alt+Tab app switching support'
+                ],
+                bugFixes: [
+                    'Fixed "ag" text appearing in menu bar',
+                    'Resolved UserNotifications bundle crashes',
+                    'Improved session management reliability'
+                ],
+                technical: [
+                    'Updated to latest Swift APIs',
+                    'Modernized UserNotifications framework',
+                    'Enhanced error logging and debugging'
+                ]
+            },
+            '2.0.0': {
+                version: '2.0.0',
+                releaseDate: '2025-09-30',
+                critical: false,
+                features: [
+                    '🔄 Complete authentication system overhaul',
+                    '🌐 Browser-based OAuth flow',
+                    '⚡ Improved performance and reliability'
+                ]
+            }
+        };
+        const changelog = version === 'latest' ? changelogs['2.1.0'] : changelogs[version];
+        if (!changelog) {
+            return res.status(404).json({ error: 'Version not found' });
+        }
+        res.json(changelog);
+    }
+    catch (error) {
+        logger_1.logger.error('Changelog fetch error', error);
+        res.status(500).json({ error: 'Failed to fetch changelog' });
     }
 });
 // Debug endpoint to reset rate limits (remove in production)

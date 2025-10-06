@@ -1126,10 +1126,9 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
     
     @objc func connectToAsanaBridge() {
-        // Ensure UI operations run on main thread
+        // Show direct login form instead of browser-based authentication
         DispatchQueue.main.async {
-            // Skip the popup - directly start connection
-            self.createAuthSessionAndPoll()
+            self.showLoginForm()
         }
     }
     
@@ -1477,6 +1476,242 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
     
+    func showLoginForm() {
+        // Create a modal window for login
+        let loginWindow = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 400, height: 350),
+            styleMask: [.titled, .closable],
+            backing: .buffered,
+            defer: false
+        )
+        
+        loginWindow.title = "Sign in to AsanaBridge"
+        loginWindow.center()
+        loginWindow.level = .modalPanel
+        
+        let containerView = NSView(frame: NSRect(x: 0, y: 0, width: 400, height: 350))
+        
+        // Logo/Title
+        let titleLabel = NSTextField(labelWithString: "Sign in to AsanaBridge")
+        titleLabel.font = NSFont.boldSystemFont(ofSize: 18)
+        titleLabel.frame = NSRect(x: 50, y: 280, width: 300, height: 25)
+        titleLabel.alignment = .center
+        containerView.addSubview(titleLabel)
+        
+        // Email field
+        let emailLabel = NSTextField(labelWithString: "Email:")
+        emailLabel.frame = NSRect(x: 50, y: 220, width: 60, height: 20)
+        emailLabel.isEditable = false
+        emailLabel.isBordered = false
+        emailLabel.backgroundColor = .clear
+        containerView.addSubview(emailLabel)
+        
+        let emailField = NSTextField(frame: NSRect(x: 50, y: 195, width: 300, height: 25))
+        emailField.placeholderString = "your@email.com"
+        containerView.addSubview(emailField)
+        
+        // Password field
+        let passwordLabel = NSTextField(labelWithString: "Password:")
+        passwordLabel.frame = NSRect(x: 50, y: 155, width: 80, height: 20)
+        passwordLabel.isEditable = false
+        passwordLabel.isBordered = false
+        passwordLabel.backgroundColor = .clear
+        containerView.addSubview(passwordLabel)
+        
+        let passwordField = NSSecureTextField(frame: NSRect(x: 50, y: 130, width: 300, height: 25))
+        passwordField.placeholderString = "Enter your password"
+        containerView.addSubview(passwordField)
+        
+        // Status label for errors/success
+        let statusLabel = NSTextField(labelWithString: "")
+        statusLabel.frame = NSRect(x: 50, y: 95, width: 300, height: 20)
+        statusLabel.alignment = .center
+        statusLabel.isEditable = false
+        statusLabel.isBordered = false
+        statusLabel.backgroundColor = .clear
+        statusLabel.textColor = NSColor.systemRed
+        containerView.addSubview(statusLabel)
+        
+        // Login button
+        let loginButton = NSButton(title: "Sign In", target: nil, action: nil)
+        loginButton.frame = NSRect(x: 150, y: 50, width: 100, height: 32)
+        loginButton.bezelStyle = .rounded
+        loginButton.keyEquivalent = "\r"
+        containerView.addSubview(loginButton)
+        
+        // Cancel button
+        let cancelButton = NSButton(title: "Cancel", target: nil, action: nil)
+        cancelButton.frame = NSRect(x: 50, y: 50, width: 80, height: 32)
+        cancelButton.bezelStyle = .rounded
+        containerView.addSubview(cancelButton)
+        
+        loginWindow.contentView = containerView
+        
+        // Store references as properties for the action (using tags as identifiers)
+        loginButton.tag = 1001
+        cancelButton.tag = 1002
+        
+        // Store references in window's content view for access
+        containerView.addSubview(emailField)
+        containerView.addSubview(passwordField)
+        containerView.addSubview(statusLabel)
+        
+        // Handle login button
+        loginButton.target = self
+        loginButton.action = #selector(handleDirectLogin(_:))
+        
+        // Handle cancel button
+        cancelButton.target = self
+        cancelButton.action = #selector(cancelLogin(_:))
+        
+        // Show the window
+        loginWindow.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+        
+        // Focus on email field
+        emailField.becomeFirstResponder()
+    }
+    
+    @objc func handleDirectLogin(_ sender: NSButton) {
+        // Find the window and fields
+        guard let window = sender.window,
+              let containerView = window.contentView,
+              let emailField = containerView.subviews.first(where: { $0 is NSTextField && $0.frame.origin.y == 195 }) as? NSTextField,
+              let passwordField = containerView.subviews.first(where: { $0 is NSSecureTextField }) as? NSSecureTextField,
+              let statusLabel = containerView.subviews.first(where: { $0 is NSTextField && $0.frame.origin.y == 95 }) as? NSTextField else {
+            return
+        }
+        
+        let email = emailField.stringValue.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
+        let password = passwordField.stringValue
+        
+        // Basic validation
+        if email.isEmpty || password.isEmpty {
+            statusLabel.stringValue = "Please enter both email and password"
+            return
+        }
+        
+        // Disable button and show loading
+        sender.isEnabled = false
+        sender.title = "Signing in..."
+        statusLabel.stringValue = "Connecting..."
+        statusLabel.textColor = NSColor.systemBlue
+        
+        // Call the direct login API
+        performDirectLogin(email: email, password: password) { [weak self] success, token, errorMessage in
+            DispatchQueue.main.async {
+                sender.isEnabled = true
+                sender.title = "Sign In"
+                
+                if success, let validToken = token {
+                    // Success! Store token and close window
+                    self?.userToken = validToken
+                    self?.storedAuthToken = validToken
+                    UserDefaults.standard.set(validToken, forKey: "userToken")
+                    self?.asanaConnected = true
+                    self?.updateStatusBarTitle("✅ AsanaBridge")
+                    
+                    // Update the UI to show connection success
+                    self?.updateAsanaBridgeStatus(status: .connected, message: "✅ Successfully connected! Ready to sync your Asana tasks.")
+                    
+                    // Auto-complete setup when connected
+                    UserDefaults.standard.set(true, forKey: "setupComplete")
+                    self?.isSetupComplete = true
+                    
+                    // Start the bridge service
+                    self?.startAsanaBridge()
+                    
+                    // Close login window
+                    window.close()
+                } else {
+                    // Show error
+                    statusLabel.stringValue = errorMessage ?? "Login failed. Please try again."
+                    statusLabel.textColor = NSColor.systemRed
+                }
+            }
+        }
+    }
+    
+    @objc func cancelLogin(_ sender: NSButton) {
+        if let window = sender.window {
+            window.close()
+        }
+    }
+    
+    func performDirectLogin(email: String, password: String, completion: @escaping (Bool, String?, String?) -> Void) {
+        guard let url = URL(string: "https://asanabridge.com/api/auth/app-login-direct") else {
+            completion(false, nil, "Invalid server URL")
+            return
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = 30.0
+        
+        let loginData = [
+            "email": email,
+            "password": password
+        ]
+        
+        do {
+            request.httpBody = try JSONSerialization.data(withJSONObject: loginData)
+        } catch {
+            completion(false, nil, "Failed to prepare login request")
+            return
+        }
+        
+        URLSession.shared.dataTask(with: request) { data, response, error in
+            if let error = error {
+                let errorMessage: String
+                if (error as NSError).code == NSURLErrorTimedOut {
+                    errorMessage = "Connection timed out. Please try again."
+                } else if (error as NSError).code == NSURLErrorNotConnectedToInternet {
+                    errorMessage = "No internet connection."
+                } else {
+                    errorMessage = "Network error. Please check your connection."
+                }
+                completion(false, nil, errorMessage)
+                return
+            }
+            
+            guard let data = data else {
+                completion(false, nil, "No response from server")
+                return
+            }
+            
+            // Check HTTP status
+            if let httpResponse = response as? HTTPURLResponse {
+                if httpResponse.statusCode == 401 {
+                    completion(false, nil, "Invalid email or password")
+                    return
+                } else if httpResponse.statusCode != 200 {
+                    completion(false, nil, "Server error (\(httpResponse.statusCode))")
+                    return
+                }
+            }
+            
+            // Parse response
+            do {
+                guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                    completion(false, nil, "Invalid response format")
+                    return
+                }
+                
+                if let success = json["success"] as? Bool, success,
+                   let token = json["token"] as? String {
+                    completion(true, token, nil)
+                } else if let error = json["error"] as? String {
+                    completion(false, nil, error)
+                } else {
+                    completion(false, nil, "Login failed")
+                }
+            } catch {
+                completion(false, nil, "Failed to parse server response")
+            }
+        }.resume()
+    }
+
     func showManualTokenEntry() {
         let alert = NSAlert()
         alert.messageText = "🔑 Manual Token Setup"

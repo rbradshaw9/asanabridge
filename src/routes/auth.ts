@@ -831,6 +831,62 @@ router.get('/app/changelog/:version?', async (req: Request, res: Response) => {
   }
 });
 
+// Direct app login endpoint (no browser required)
+router.post('/app-login-direct', async (req: Request, res: Response) => {
+  try {
+    const { email, password } = loginSchema.parse(req.body);
+    
+    // Find user by email
+    const user = await prisma.user.findUnique({
+      where: { email }
+    });
+    
+    if (!user || !user.password) {
+      return res.status(401).json({ error: 'Invalid email or password' });
+    }
+    
+    // Check password
+    const isValidPassword = await AuthService.verifyPassword(password, user.password);
+    
+    if (!isValidPassword) {
+      return res.status(401).json({ error: 'Invalid email or password' });
+    }
+    
+    // Generate JWT token
+    const token = AuthService.generateToken({
+      userId: user.id,
+      email: user.email,
+      plan: user.plan,
+      isAdmin: user.isAdmin
+    });
+    
+    logger.info('Direct app login successful', { userId: user.id, email: user.email });
+    
+    res.json({
+      success: true,
+      message: 'Login successful',
+      token,
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        plan: user.plan
+      }
+    });
+    
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ 
+        error: 'Validation failed',
+        details: error.errors 
+      });
+    }
+    
+    logger.error('Direct app login error', error);
+    res.status(500).json({ error: 'Login failed' });
+  }
+});
+
 // Debug endpoint to reset rate limits (remove in production)
 router.post('/debug/reset-rate-limit', async (req: Request, res: Response) => {
   try {
