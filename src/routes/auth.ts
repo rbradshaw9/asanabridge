@@ -746,26 +746,29 @@ router.get('/app/download/latest', async (req: Request, res: Response) => {
       timestamp: new Date().toISOString()
     });
     
-    // In production, this would serve the actual .dmg file
-    // For now, redirect to a placeholder or serve from storage
-    const downloadPath = '/path/to/AsanaBridge-2.1.0.dmg';
+    // Serve the actual DMG file from public/downloads
+    const path = require('path');
+    const downloadPath = path.join(__dirname, '../../public/downloads/AsanaBridge-2.1.0.dmg');
+    
+    // Check if file exists
+    const fs = require('fs');
+    if (!fs.existsSync(downloadPath)) {
+      logger.error('DMG file not found', { downloadPath });
+      return res.status(404).json({ error: 'Download file not found' });
+    }
+    
+    // Get file stats for Content-Length
+    const stats = fs.statSync(downloadPath);
+    const fileSize = stats.size;
     
     // Set appropriate headers for file download
     res.setHeader('Content-Type', 'application/x-apple-diskimage');
     res.setHeader('Content-Disposition', 'attachment; filename="AsanaBridge-2.1.0.dmg"');
-    res.setHeader('Content-Length', '25000000'); // ~25MB
+    res.setHeader('Content-Length', fileSize.toString());
+    res.setHeader('Cache-Control', 'public, max-age=3600'); // Cache for 1 hour
     
-    // In production, stream the file:
-    // res.sendFile(downloadPath);
-    
-    // For development, return download info
-    res.json({
-      message: 'Download would start here',
-      filename: 'AsanaBridge-2.1.0.dmg',
-      version: '2.1.0',
-      size: 25000000,
-      downloadPath
-    });
+    // Stream the file
+    res.sendFile(downloadPath);
     
   } catch (error) {
     logger.error('App download error', error);
