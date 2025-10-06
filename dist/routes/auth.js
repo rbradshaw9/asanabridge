@@ -223,10 +223,11 @@ const appSessions = new Map();
 const sessionAttempts = new Map();
 // Clean up old sessions and rate limit data every hour
 setInterval(() => {
+    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000); // Extended to 2 hours
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
-    // Clean up old sessions
+    // Clean up old sessions (keep them for 2 hours instead of 1)
     for (const [sessionId, session] of appSessions.entries()) {
-        if (session.createdAt < oneHourAgo) {
+        if (session.createdAt < twoHoursAgo) {
             appSessions.delete(sessionId);
         }
     }
@@ -241,12 +242,13 @@ setInterval(() => {
 router.post('/app-session', async (req, res) => {
     try {
         const clientIP = req.ip || req.connection.remoteAddress || 'unknown';
-        // Rate limiting: max 10 session creation attempts per hour per IP
+        // More lenient rate limiting: max 50 session creation attempts per hour per IP
+        // This allows for multiple browsers, retries, and legitimate usage
         const attempts = sessionAttempts.get(clientIP);
         const now = new Date();
         if (attempts) {
             const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
-            if (attempts.lastAttempt > oneHourAgo && attempts.count >= 10) {
+            if (attempts.lastAttempt > oneHourAgo && attempts.count >= 50) {
                 return res.status(429).json({
                     error: 'Too many session creation attempts. Please try again later.'
                 });
@@ -299,11 +301,17 @@ router.get('/app-session', async (req, res) => {
         }
         const session = appSessions.get(sessionId);
         if (!session) {
-            return res.status(404).json({ error: 'Session not found or expired' });
+            logger_1.logger.warn('Session polling failed - session not found', { sessionId, totalSessions: appSessions.size });
+            return res.status(404).json({ error: 'Session not found or expired. Please restart the connection process.' });
         }
         if (session.authorized && session.token) {
-            // Clean up the session after successful auth
-            appSessions.delete(sessionId);
+            // Don't clean up immediately - let the app fetch the token first
+            logger_1.logger.info('Session authorized, returning token', { sessionId, userId: session.userId });
+            // Mark for cleanup after a delay
+            setTimeout(() => {
+                appSessions.delete(sessionId);
+                logger_1.logger.info('Session cleaned up after successful auth', { sessionId });
+            }, 30000); // 30 seconds delay
             return res.json({
                 authorized: true,
                 token: session.token,
@@ -312,7 +320,8 @@ router.get('/app-session', async (req, res) => {
         }
         res.json({
             authorized: false,
-            message: 'Waiting for authorization...'
+            message: 'Waiting for authorization...',
+            sessionAge: Math.floor((Date.now() - session.createdAt.getTime()) / 1000) // Age in seconds for debugging
         });
     }
     catch (error) {
@@ -438,7 +447,10 @@ router.get('/app-login', async (req, res) => {
         </div>
         
         <script>
+          console.log('Authorization page loaded for session: ${sessionId}');
+          
           async function authorize() {
+            console.log('Starting authorization for session: ${sessionId}');
             try {
               const response = await fetch('/api/auth/app-authorize', {
                 method: 'POST',
@@ -446,14 +458,19 @@ router.get('/app-login', async (req, res) => {
                 body: JSON.stringify({ sessionId: '${sessionId}' })
               });
               
+              console.log('Authorization response status:', response.status);
+              
               if (response.ok) {
+                console.log('Authorization successful, reloading page');
                 location.reload();
               } else {
                 const error = await response.json();
+                console.error('Authorization failed:', error);
                 alert('Authorization failed: ' + (error.error || 'Unknown error'));
               }
             } catch (error) {
-              alert('Connection error. Please try again.');
+              console.error('Authorization connection error:', error);
+              alert('Connection error. Please try again. If the problem persists, restart the connection in your app.');
             }
           }
           
@@ -466,6 +483,8 @@ router.get('/app-login', async (req, res) => {
               return;
             }
             
+            console.log('Starting login and authorization for:', email);
+            
             try {
               const response = await fetch('/api/auth/app-authorize', {
                 method: 'POST',
@@ -477,14 +496,19 @@ router.get('/app-login', async (req, res) => {
                 })
               });
               
+              console.log('Login response status:', response.status);
+              
               if (response.ok) {
+                console.log('Login successful, reloading page');
                 location.reload();
               } else {
                 const error = await response.json();
+                console.error('Login failed:', error);
                 alert('Login failed: ' + (error.error || 'Unknown error'));
               }
             } catch (error) {
-              alert('Connection error. Please try again.');
+              console.error('Login connection error:', error);
+              alert('Connection error. Please try again. If the problem persists, restart the connection in your app.');
             }
           }
         </script>
@@ -506,7 +530,8 @@ router.post('/app-authorize', async (req, res) => {
         }
         const session = appSessions.get(sessionId);
         if (!session) {
-            return res.status(404).json({ error: 'Session not found or expired' });
+            logger_1.logger.warn('Session not found for authorization', { sessionId, availableSessions: Array.from(appSessions.keys()) });
+            return res.status(404).json({ error: 'Session not found or expired. Please restart the connection process in your app.' });
         }
         // If credentials provided, authenticate the user
         if (email && password) {
