@@ -838,7 +838,7 @@ router.get('/app/changelog/:version?', async (req: Request, res: Response) => {
       }
     };
     
-    const changelog = version === 'latest' ? changelogs['2.1.0'] : changelogs[version as keyof typeof changelogs];
+    const changelog = version === 'latest' ? changelogs['2.2.0'] : changelogs[version as keyof typeof changelogs];
     
     if (!changelog) {
       return res.status(404).json({ error: 'Version not found' });
