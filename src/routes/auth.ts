@@ -694,7 +694,7 @@ router.get('/app/version-check', async (req: Request, res: Response) => {
     const currentVersion = req.query.current as string;
     
     // Current app version info - easily updatable
-    const latestVersion = "2.2.0";
+    const latestVersion = "2.1.0";
     const minimumVersion = "2.0.0";
     const downloadUrl = "https://asanabridge.com/api/auth/app/download/latest";
     const fileSize = 25_000_000; // ~25MB
@@ -748,7 +748,7 @@ router.get('/app/download/latest', async (req: Request, res: Response) => {
     
     // Serve the actual DMG file from public/downloads
     const path = require('path');
-    const downloadPath = path.join(__dirname, '../../public/downloads/AsanaBridge-2.2.0.dmg');
+    const downloadPath = path.join(__dirname, '../../public/downloads/AsanaBridge-2.1.0.dmg');
     
     // Check if file exists
     const fs = require('fs');
@@ -763,7 +763,7 @@ router.get('/app/download/latest', async (req: Request, res: Response) => {
     
     // Set appropriate headers for file download
     res.setHeader('Content-Type', 'application/x-apple-diskimage');
-    res.setHeader('Content-Disposition', 'attachment; filename="AsanaBridge-2.2.0.dmg"');
+    res.setHeader('Content-Disposition', 'attachment; filename="AsanaBridge-2.1.0.dmg"');
     res.setHeader('Content-Length', fileSize.toString());
     res.setHeader('Cache-Control', 'public, max-age=3600'); // Cache for 1 hour
     
@@ -839,7 +839,7 @@ router.get('/app/changelog/:version?', async (req: Request, res: Response) => {
       }
     };
     
-    const changelog = version === 'latest' ? changelogs['2.2.0'] : changelogs[version as keyof typeof changelogs];
+    const changelog = version === 'latest' ? changelogs['2.1.0'] : changelogs[version as keyof typeof changelogs];
     
     if (!changelog) {
       return res.status(404).json({ error: 'Version not found' });
