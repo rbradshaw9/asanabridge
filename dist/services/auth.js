@@ -10,6 +10,7 @@ const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const crypto_1 = __importDefault(require("crypto"));
 const env_1 = require("../config/env");
 const logger_1 = require("../config/logger");
+const env = (0, env_1.loadEnv)();
 class AuthService {
     // Using Node.js built-in crypto for password hashing (temporary until bcrypt works)
     static async hashPassword(password) {
@@ -23,25 +24,25 @@ class AuthService {
         return hash === verifyHash;
     }
     static generateToken(payload) {
-        return jsonwebtoken_1.default.sign(payload, env_1.env.JWT_SECRET, {
-            expiresIn: env_1.env.JWT_EXPIRES_IN,
+        return jsonwebtoken_1.default.sign(payload, env.JWT_SECRET, {
+            expiresIn: env.JWT_EXPIRES_IN,
         });
     }
     static verifyToken(token) {
-        return jsonwebtoken_1.default.verify(token, env_1.env.JWT_SECRET);
+        return jsonwebtoken_1.default.verify(token, env.JWT_SECRET);
     }
 }
 exports.AuthService = AuthService;
 // Export convenience functions
 const generateToken = (userId) => {
     // For now, just include userId - we can expand the payload later
-    return jsonwebtoken_1.default.sign({ userId }, env_1.env.JWT_SECRET, {
-        expiresIn: env_1.env.JWT_EXPIRES_IN,
+    return jsonwebtoken_1.default.sign({ userId }, env.JWT_SECRET, {
+        expiresIn: env.JWT_EXPIRES_IN,
     });
 };
 exports.generateToken = generateToken;
 const verifyToken = (token) => {
-    return jsonwebtoken_1.default.verify(token, env_1.env.JWT_SECRET);
+    return jsonwebtoken_1.default.verify(token, env.JWT_SECRET);
 };
 exports.verifyToken = verifyToken;
 function authenticateToken(req, res, next) {

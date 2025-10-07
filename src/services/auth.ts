@@ -1,8 +1,10 @@
 import jwt, { SignOptions } from 'jsonwebtoken';
 import crypto from 'crypto';
 import { Request, Response, NextFunction } from 'express';
-import { env } from '../config/env';
+import { loadEnv } from '../config/env';
 import { logger } from '../config/logger';
+
+const env = loadEnv();
 
 export interface JWTPayload {
   userId: string;

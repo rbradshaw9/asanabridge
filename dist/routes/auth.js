@@ -565,13 +565,12 @@ router.post('/app-authorize', async (req, res) => {
             });
         }
         else {
-            // Simple authorization without credentials (for now, use a default user)
-            // This should be improved to require actual login
+            // Simple authorization without credentials - use the test user we created
             const defaultUser = await database_1.prisma.user.findFirst({
-                where: { email: 'ryan@ignitiongo.com' }
+                where: { email: 'test@example.com' }
             });
             if (!defaultUser) {
-                return res.status(404).json({ error: 'Default user not found' });
+                return res.status(404).json({ error: 'Test user not found. Please use the login form below with your credentials.' });
             }
             // Generate real JWT token for default user
             const token = auth_1.AuthService.generateToken({
@@ -604,7 +603,7 @@ router.get('/app/version-check', async (req, res) => {
         const latestVersion = "2.2.0";
         const minimumVersion = "2.0.0";
         const downloadUrl = "https://asanabridge.com/api/auth/app/download/latest";
-        const fileSize = 25000000; // ~25MB
+        const fileSize = 160000; // ~160KB
         // Validate current version format if provided
         if (currentVersion && !/^\d+\.\d+\.\d+$/.test(currentVersion)) {
             return res.status(400).json({ error: 'Invalid version format' });
@@ -733,7 +732,7 @@ router.get('/app/changelog/:version?', async (req, res) => {
                 ]
             }
         };
-        const changelog = version === 'latest' ? changelogs['2.2.0'] : changelogs[version];
+        const changelog = version === 'latest' ? changelogs['2.1.0'] : changelogs[version];
         if (!changelog) {
             return res.status(404).json({ error: 'Version not found' });
         }

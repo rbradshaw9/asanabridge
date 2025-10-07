@@ -8,11 +8,12 @@ const axios_1 = __importDefault(require("axios"));
 const env_1 = require("../config/env");
 const logger_1 = require("../config/logger");
 const database_1 = require("../config/database");
+const env = (0, env_1.loadEnv)();
 class AsanaOAuth {
     static getAuthUrl(state) {
         const params = new URLSearchParams({
-            client_id: env_1.env.ASANA_CLIENT_ID,
-            redirect_uri: env_1.env.ASANA_REDIRECT_URI,
+            client_id: env.ASANA_CLIENT_ID,
+            redirect_uri: env.ASANA_REDIRECT_URI,
             response_type: 'code',
             state: state || '',
             scope: 'default'
@@ -23,9 +24,9 @@ class AsanaOAuth {
         try {
             const response = await axios_1.default.post(this.TOKEN_URL, {
                 grant_type: 'authorization_code',
-                client_id: env_1.env.ASANA_CLIENT_ID,
-                client_secret: env_1.env.ASANA_CLIENT_SECRET,
-                redirect_uri: env_1.env.ASANA_REDIRECT_URI,
+                client_id: env.ASANA_CLIENT_ID,
+                client_secret: env.ASANA_CLIENT_SECRET,
+                redirect_uri: env.ASANA_REDIRECT_URI,
                 code
             }, {
                 headers: {
@@ -45,8 +46,8 @@ class AsanaOAuth {
         try {
             const response = await axios_1.default.post(this.TOKEN_URL, {
                 grant_type: 'refresh_token',
-                client_id: env_1.env.ASANA_CLIENT_ID,
-                client_secret: env_1.env.ASANA_CLIENT_SECRET,
+                client_id: env.ASANA_CLIENT_ID,
+                client_secret: env.ASANA_CLIENT_SECRET,
                 refresh_token: refreshToken
             }, {
                 headers: {

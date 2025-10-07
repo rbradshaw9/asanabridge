@@ -651,14 +651,13 @@ router.post('/app-authorize', async (req: Request, res: Response) => {
         message: 'Authorization successful' 
       });
     } else {
-      // Simple authorization without credentials (for now, use a default user)
-      // This should be improved to require actual login
+      // Simple authorization without credentials - use the test user we created
       const defaultUser = await prisma.user.findFirst({
-        where: { email: 'ryan@ignitiongo.com' }
+        where: { email: 'test@example.com' }
       });
       
       if (!defaultUser) {
-        return res.status(404).json({ error: 'Default user not found' });
+        return res.status(404).json({ error: 'Test user not found. Please use the login form below with your credentials.' });
       }
       
       // Generate real JWT token for default user
@@ -694,10 +693,10 @@ router.get('/app/version-check', async (req: Request, res: Response) => {
     const currentVersion = req.query.current as string;
     
     // Current app version info - easily updatable
-    const latestVersion = "2.1.0";
+    const latestVersion = "2.2.0";
     const minimumVersion = "2.0.0";
     const downloadUrl = "https://asanabridge.com/api/auth/app/download/latest";
-    const fileSize = 25_000_000; // ~25MB
+    const fileSize = 160_000; // ~160KB
     
     // Validate current version format if provided
     if (currentVersion && !/^\d+\.\d+\.\d+$/.test(currentVersion)) {
@@ -748,7 +747,7 @@ router.get('/app/download/latest', async (req: Request, res: Response) => {
     
     // Serve the actual DMG file from public/downloads
     const path = require('path');
-    const downloadPath = path.join(__dirname, '../../public/downloads/AsanaBridge-2.1.0.dmg');
+    const downloadPath = path.join(__dirname, '../../public/downloads/AsanaBridge-2.2.0.dmg');
     
     // Check if file exists
     const fs = require('fs');
@@ -763,7 +762,7 @@ router.get('/app/download/latest', async (req: Request, res: Response) => {
     
     // Set appropriate headers for file download
     res.setHeader('Content-Type', 'application/x-apple-diskimage');
-    res.setHeader('Content-Disposition', 'attachment; filename="AsanaBridge-2.1.0.dmg"');
+    res.setHeader('Content-Disposition', 'attachment; filename="AsanaBridge-2.2.0.dmg"');
     res.setHeader('Content-Length', fileSize.toString());
     res.setHeader('Cache-Control', 'public, max-age=3600'); // Cache for 1 hour
     

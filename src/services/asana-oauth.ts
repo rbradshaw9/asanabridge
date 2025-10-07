@@ -1,8 +1,10 @@
 import { Request, Response, NextFunction } from 'express';
 import axios from 'axios';
-import { env } from '../config/env';
+import { loadEnv } from '../config/env';
 import { logger } from '../config/logger';
 import { prisma } from '../config/database';
+
+const env = loadEnv();
 
 export interface AsanaOAuthTokens {
   access_token: string;
