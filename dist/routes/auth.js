@@ -601,7 +601,7 @@ router.get('/app/version-check', async (req, res) => {
     try {
         const currentVersion = req.query.current;
         // Current app version info - easily updatable
-        const latestVersion = "2.1.0";
+        const latestVersion = "2.2.0";
         const minimumVersion = "2.0.0";
         const downloadUrl = "https://asanabridge.com/api/auth/app/download/latest";
         const fileSize = 25000000; // ~25MB
@@ -618,15 +618,15 @@ router.get('/app/version-check', async (req, res) => {
             downloadUrl,
             needsUpdate,
             isSupported,
-            releaseNotes: "Enhanced authentication flow, improved error handling, and better system integration",
+            releaseNotes: "Direct in-app login, persistent authentication, and simplified first-run experience",
             critical: !isSupported, // Force update if below minimum version
-            releaseDate: "2025-10-06",
+            releaseDate: "2025-10-07",
             fileSize,
             changelog: [
-                "🔧 Fixed menu bar icon visibility issues",
-                "✅ Improved authentication reliability",
-                "🚀 Added automatic update checking",
-                "🔐 Enhanced security and error handling"
+                "� Direct in-app login - no more browser required!",
+                "✅ Persistent authentication - stay logged in between app restarts",
+                "🚀 Smart first-run experience - login window appears immediately",
+                "� Enhanced token persistence and error handling"
             ]
         });
     }
@@ -644,26 +644,28 @@ router.get('/app/download/latest', async (req, res) => {
         logger_1.logger.info('App download requested', {
             ip: clientIP,
             userAgent,
-            version: '2.1.0',
+            version: '2.2.0',
             timestamp: new Date().toISOString()
         });
-        // In production, this would serve the actual .dmg file
-        // For now, redirect to a placeholder or serve from storage
-        const downloadPath = '/path/to/AsanaBridge-2.1.0.dmg';
+        // Serve the actual DMG file from public/downloads
+        const path = require('path');
+        const downloadPath = path.join(__dirname, '../../public/downloads/AsanaBridge-2.2.0.dmg');
+        // Check if file exists
+        const fs = require('fs');
+        if (!fs.existsSync(downloadPath)) {
+            logger_1.logger.error('DMG file not found', { downloadPath });
+            return res.status(404).json({ error: 'Download file not found' });
+        }
+        // Get file stats for Content-Length
+        const stats = fs.statSync(downloadPath);
+        const fileSize = stats.size;
         // Set appropriate headers for file download
         res.setHeader('Content-Type', 'application/x-apple-diskimage');
-        res.setHeader('Content-Disposition', 'attachment; filename="AsanaBridge-2.1.0.dmg"');
-        res.setHeader('Content-Length', '25000000'); // ~25MB
-        // In production, stream the file:
-        // res.sendFile(downloadPath);
-        // For development, return download info
-        res.json({
-            message: 'Download would start here',
-            filename: 'AsanaBridge-2.1.0.dmg',
-            version: '2.1.0',
-            size: 25000000,
-            downloadPath
-        });
+        res.setHeader('Content-Disposition', 'attachment; filename="AsanaBridge-2.2.0.dmg"');
+        res.setHeader('Content-Length', fileSize.toString());
+        res.setHeader('Cache-Control', 'public, max-age=3600'); // Cache for 1 hour
+        // Stream the file
+        res.sendFile(downloadPath);
     }
     catch (error) {
         logger_1.logger.error('App download error', error);
@@ -676,6 +678,28 @@ router.get('/app/changelog/:version?', async (req, res) => {
         const version = req.params.version || 'latest';
         // Version changelog database (in production, store in database)
         const changelogs = {
+            '2.2.0': {
+                version: '2.2.0',
+                releaseDate: '2025-10-07',
+                critical: false,
+                features: [
+                    '🔐 Direct in-app login - no more browser required!',
+                    '✅ Persistent authentication - stay logged in between app restarts',
+                    '🚀 Smart first-run experience - login window appears immediately after install',
+                    '💾 Enhanced token persistence with immediate saving to disk',
+                    '🛡️ Improved app termination handling to preserve login state'
+                ],
+                bugFixes: [
+                    'Fixed browser-based authentication issues',
+                    'Resolved token persistence on force-quit',
+                    'Improved first-time user experience'
+                ],
+                technical: [
+                    'Added applicationWillTerminate delegate for graceful shutdown',
+                    'Implemented UserDefaults.synchronize() for immediate data persistence',
+                    'Enhanced handleFirstRun() logic for better user onboarding'
+                ]
+            },
             '2.1.0': {
                 version: '2.1.0',
                 releaseDate: '2025-10-06',
@@ -709,7 +733,7 @@ router.get('/app/changelog/:version?', async (req, res) => {
                 ]
             }
         };
-        const changelog = version === 'latest' ? changelogs['2.1.0'] : changelogs[version];
+        const changelog = version === 'latest' ? changelogs['2.2.0'] : changelogs[version];
         if (!changelog) {
             return res.status(404).json({ error: 'Version not found' });
         }
@@ -718,6 +742,53 @@ router.get('/app/changelog/:version?', async (req, res) => {
     catch (error) {
         logger_1.logger.error('Changelog fetch error', error);
         res.status(500).json({ error: 'Failed to fetch changelog' });
+    }
+});
+// Direct app login endpoint (no browser required)
+router.post('/app-login-direct', async (req, res) => {
+    try {
+        const { email, password } = loginSchema.parse(req.body);
+        // Find user by email
+        const user = await database_1.prisma.user.findUnique({
+            where: { email }
+        });
+        if (!user || !user.password) {
+            return res.status(401).json({ error: 'Invalid email or password' });
+        }
+        // Check password
+        const isValidPassword = await auth_1.AuthService.verifyPassword(password, user.password);
+        if (!isValidPassword) {
+            return res.status(401).json({ error: 'Invalid email or password' });
+        }
+        // Generate JWT token
+        const token = auth_1.AuthService.generateToken({
+            userId: user.id,
+            email: user.email,
+            plan: user.plan,
+            isAdmin: user.isAdmin
+        });
+        logger_1.logger.info('Direct app login successful', { userId: user.id, email: user.email });
+        res.json({
+            success: true,
+            message: 'Login successful',
+            token,
+            user: {
+                id: user.id,
+                email: user.email,
+                name: user.name,
+                plan: user.plan
+            }
+        });
+    }
+    catch (error) {
+        if (error instanceof zod_1.z.ZodError) {
+            return res.status(400).json({
+                error: 'Validation failed',
+                details: error.errors
+            });
+        }
+        logger_1.logger.error('Direct app login error', error);
+        res.status(500).json({ error: 'Login failed' });
     }
 });
 // Debug endpoint to reset rate limits (remove in production)
