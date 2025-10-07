@@ -77,35 +77,21 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // Check for app updates
         checkForUpdates()
         
-        print("✅ AsanaBridge setup complete, showing setup wizard...")
+        print("✅ AsanaBridge setup complete")
         
-        // Always show the setup wizard for now - keep it simple
-        showSetupWizard()
+        // Smart startup: show login for new/unauthenticated users, run silently for authenticated users
+        handleFirstRun()
     }
     
     func loadSavedToken() {
         if let savedToken = UserDefaults.standard.string(forKey: "userToken"), !savedToken.isEmpty {
-            print("✅ Found saved authentication token - validating...")
+            print("✅ Found saved authentication token")
             userToken = savedToken
             storedAuthToken = savedToken
-            
-            // Validate token against server
-            validateToken(savedToken) { [weak self] isValid in
-                DispatchQueue.main.async {
-                    if isValid {
-                        self?.asanaConnected = true
-                        self?.updateStatusBarTitle("✅ AsanaBridge")
-                        print("✅ Token validation successful")
-                    } else {
-                        print("❌ Token validation failed - clearing invalid token")
-                        self?.clearTokenAndReset()
-                    }
-                }
-            }
         } else {
             print("ℹ️ No saved authentication token found")
-            asanaConnected = false
-            updateStatusBarTitle("❌ AsanaBridge")
+            userToken = nil
+            storedAuthToken = nil
         }
     }
     
@@ -145,6 +131,55 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
         asanaConnected = false
         isSetupComplete = false
         updateStatusBarTitle("❌ AsanaBridge")
+    }
+    
+    func handleFirstRun() {
+        // Check if user has a valid token
+        if let token = userToken, !token.isEmpty {
+            // Existing user with token - validate it
+            print("🔑 Existing user detected - validating token...")
+            validateToken(token) { [weak self] isValid in
+                DispatchQueue.main.async {
+                    if isValid {
+                        // Valid token - run silently in background
+                        print("✅ User authenticated - running in background")
+                        self?.asanaConnected = true
+                        self?.updateStatusBarTitle("✅ AsanaBridge")
+                        
+                        // Show a brief welcome notification for returning users
+                        self?.showWelcomeNotification()
+                    } else {
+                        // Invalid/expired token - show login
+                        print("❌ Token expired - showing login window")
+                        self?.clearTokenAndReset()
+                        self?.showWelcomeLoginWindow()
+                    }
+                }
+            }
+        } else {
+            // New user - show prominent welcome/login window
+            print("🆕 New user detected - showing welcome login window")
+            showWelcomeLoginWindow()
+        }
+    }
+    
+    func showWelcomeLoginWindow() {
+        // Show a more prominent welcome window for first-time users
+        DispatchQueue.main.async { [weak self] in
+            self?.showLoginForm()
+            
+            // Also show in dock so it's more discoverable for new users
+            NSApp.setActivationPolicy(.regular)
+            NSApp.activate(ignoringOtherApps: true)
+        }
+    }
+    
+    func showWelcomeNotification() {
+        // Brief notification for returning users (non-intrusive)
+        print("🔔 Welcome back! AsanaBridge is running and ready to sync.")
+        
+        // Show a subtle menu bar indication that we're connected
+        updateStatusBarTitle("✅ AsanaBridge")
     }
     
     func checkForUpdates() {
@@ -666,9 +701,13 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
     
     @objc func openMainWindow() {
         print("🪟 Opening main window...")
-        if !isSetupComplete {
-            showSetupWizard()
+        
+        // Check if user is authenticated
+        if userToken == nil || userToken!.isEmpty {
+            print("🔑 User not authenticated - showing login form")
+            showLoginForm()
         } else {
+            print("✅ User authenticated - showing main window")
             showMainWindow()
         }
     }
@@ -1233,6 +1272,7 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     self.isAwaitingAuthentication = false
                     self.userToken = validToken
                     UserDefaults.standard.set(validToken, forKey: "userToken")
+                    UserDefaults.standard.synchronize() // Force immediate save to disk
                     self.asanaConnected = true
                     self.updateStatusBarTitle("✅ AsanaBridge")
                     
@@ -1370,6 +1410,7 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
         userToken = authToken
         storedAuthToken = authToken
         UserDefaults.standard.set(authToken, forKey: "userToken")
+        UserDefaults.standard.synchronize() // Force immediate save to disk
         asanaConnected = true
         isAwaitingAuthentication = false
         authSessionId = nil
@@ -1608,6 +1649,7 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     self?.userToken = validToken
                     self?.storedAuthToken = validToken
                     UserDefaults.standard.set(validToken, forKey: "userToken")
+                    UserDefaults.standard.synchronize() // Force immediate save to disk
                     self?.asanaConnected = true
                     self?.updateStatusBarTitle("✅ AsanaBridge")
                     
@@ -1787,6 +1829,7 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
                         // Success!
                         self.userToken = token
                         UserDefaults.standard.set(token, forKey: "userToken")
+                        UserDefaults.standard.synchronize() // Force immediate save to disk
                         self.updateStatusBarTitle("✅ AsanaBridge")
                         self.showAlert(title: "🎉 Connected Successfully!", 
                                      message: "AsanaBridge is now connected to your account. Your tasks will sync automatically!")
@@ -2055,6 +2098,34 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
         
         print("✅ Clean shutdown complete")
         NSApplication.shared.terminate(nil)
+    }
+    
+    // MARK: - App Lifecycle Delegates
+    
+    func applicationWillTerminate(_ notification: Notification) {
+        print("🛑 Application terminating - ensuring token persistence...")
+        
+        // Force save current authentication state
+        if let token = userToken, !token.isEmpty {
+            UserDefaults.standard.set(token, forKey: "userToken")
+            print("✅ Token saved to UserDefaults")
+        }
+        
+        // Force save setup completion state
+        if asanaConnected {
+            UserDefaults.standard.set(true, forKey: "setupComplete")
+            print("✅ Setup state saved")
+        }
+        
+        // Force synchronize UserDefaults to disk
+        UserDefaults.standard.synchronize()
+        print("✅ UserDefaults synchronized to disk")
+        
+        // Clean up timers and observers
+        authPollingTimer?.invalidate()
+        authPollingTimer = nil
+        
+        print("✅ Application termination cleanup complete")
     }
     
     func showAlert(title: String, message: String) {
