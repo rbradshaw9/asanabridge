@@ -174,7 +174,7 @@ router.post('/sync-status', authenticateAgent, async (req: Request, res: Respons
         syncMappingId: mappingId,
         direction: 'BIDIRECTIONAL',
         status: status === 'success' ? 'SUCCESS' : 'ERROR',
-        itemssynced: details?.tasksFound || 0,
+        itemsSynced: details?.tasksFound || 0,
         errorMessage: details?.error || null
       }
     });
@@ -302,7 +302,7 @@ router.get('/account-info', authenticateAgent, async (req: Request, res: Respons
       select: {
         createdAt: true,
         status: true,
-        itemssynced: true
+        itemsSynced: true
       }
     });
 
@@ -318,7 +318,7 @@ router.get('/account-info', authenticateAgent, async (req: Request, res: Respons
         lastSync: lastSync ? {
           time: lastSync.createdAt.toISOString(),
           status: lastSync.status,
-          itemsSynced: lastSync.itemssynced
+          itemsSynced: lastSync.itemsSynced
         } : null
       },
       agent: {

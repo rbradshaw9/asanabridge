@@ -116,7 +116,7 @@ model SyncLog {
   syncMappingId String
   direction     SyncDirection
   status        SyncStatus
-  itemsSynced   Int        @default(0)
+  itemsSynced   Int        @default(0) @map("itemssynced")
   errorMessage  String?
   createdAt     DateTime   @default(now())
 
