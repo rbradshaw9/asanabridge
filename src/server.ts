@@ -201,7 +201,7 @@ app.use('/api/diagnostics', diagnosticsRoutes);
 app.get('/api/status', (_req, res) => {
   res.json({ 
     service: 'AsanaBridge API',
-    version: '0.1.0',
+    version: '2.2.1',
     environment: env.NODE_ENV
   });
 });
