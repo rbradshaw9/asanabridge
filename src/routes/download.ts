@@ -2,32 +2,37 @@ import { Router, Request, Response } from 'express';
 import path from 'path';
 import fs from 'fs';
 import { authenticateToken, AuthenticatedRequest } from '../services/auth';
+import { logger } from '../config/logger';
 
 const router = Router();
 
 // Download agent for authenticated users
 router.get('/agent', authenticateToken, (req: AuthenticatedRequest, res: Response) => {
-  const userId = req.user!.userId;
-  
-  // Determine user's platform (for now, assume macOS)
-  const platform = 'macos';
-  const arch = 'universal'; // We'll build universal binaries
-  
-  const dmgPath = path.join(__dirname, '../../public/downloads/AsanaBridge-2.2.0.dmg');
-  
-  if (!fs.existsSync(dmgPath)) {
-    return res.status(404).json({ 
-      error: 'Agent download not available yet',
-      message: 'The OmniFocus agent installer is being prepared. Please try again shortly.'
+  try {
+    logger.info('Agent download requested', {
+      userId: req.user?.id,
+      email: req.user?.email
     });
+
+    // Path to the DMG file
+    const dmgPath = path.join(__dirname, '../../public/downloads/AsanaBridge-2.2.1.dmg');
+
+    // Check if file exists
+    if (!fs.existsSync(dmgPath)) {
+      logger.error('DMG file not found at path', { path: dmgPath });
+      return res.status(404).json({ error: 'Download file not found' });
+    }
+
+    // Set headers for download
+    res.setHeader('Content-Type', 'application/x-apple-diskimage');
+    res.setHeader('Content-Disposition', 'attachment; filename="AsanaBridge-2.2.1.dmg"');
+
+    // Stream the file
+    res.sendFile(dmgPath);
+  } catch (error) {
+    logger.error('Agent download error', error);
+    res.status(500).json({ error: 'Failed to download agent' });
   }
-  
-  // Set headers for download
-  res.setHeader('Content-Disposition', 'attachment; filename="AsanaBridge-2.2.0.dmg"');
-  res.setHeader('Content-Type', 'application/x-apple-diskimage');
-  
-  // Send the DMG file
-  res.sendFile(dmgPath);
 });
 
 // Get download instructions

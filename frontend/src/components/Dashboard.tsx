@@ -388,7 +388,7 @@ const Dashboard: React.FC = () => {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'AsanaBridge-2.2.0.dmg';
+      a.download = 'AsanaBridge-2.2.1.dmg';
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);

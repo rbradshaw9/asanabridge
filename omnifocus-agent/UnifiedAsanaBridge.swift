@@ -56,6 +56,7 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
     
     func applicationDidFinishLaunching(_ notification: Notification) {
         print("🚀 AsanaBridge app launching...")
+        print("📍 Version: \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown")")
         
         // Configure as regular app (dock icon + menu bar + Alt+Tab support)
         print("🔧 Setting activation policy to .regular (full app functionality)...")
@@ -65,13 +66,22 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let currentPolicy = NSApp.activationPolicy()
         print("✅ Current activation policy: \(currentPolicy.rawValue) (0=regular, 1=accessory, 2=prohibited)")
         
+        // Set up UI components with validation
         setupMainMenu()
         setupMenuBar()
+        
+        // Verify menu bar was created successfully
+        if statusItem == nil {
+            print("⚠️ WARNING: Status item failed to create - retrying...")
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+                self?.setupMenuBar()
+            }
+        }
         
         // Load saved authentication token
         loadSavedToken()
         
-        // Set up system event notifications
+        // Set up system event notifications  
         setupSystemNotifications()
         
         // Check for app updates
@@ -690,7 +700,12 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
             // Show the menu at the status item location
             statusItem.menu = contextMenu
             statusItem.button?.performClick(nil)
-            statusItem.menu = nil // Clear menu after use
+            
+            // IMPORTANT: Schedule menu cleanup for AFTER menu is dismissed
+            // Setting menu = nil immediately causes the status item to disappear!
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                self?.statusItem?.menu = nil
+            }
             
         } else {
             // Left click - show main interface
@@ -1963,45 +1978,82 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func createStatusView() -> NSView {
         let containerView = NSView(frame: NSRect(x: 0, y: 0, width: 500, height: 400))
         
-        // Header
-        let headerLabel = NSTextField(labelWithString: "AsanaBridge Status")
-        headerLabel.font = NSFont.boldSystemFont(ofSize: 18)
+        // Header with app icon and title
+        let headerLabel = NSTextField(labelWithString: "📊 AsanaBridge Status")
+        headerLabel.font = NSFont.boldSystemFont(ofSize: 20)
         headerLabel.frame = NSRect(x: 20, y: 350, width: 460, height: 30)
+        headerLabel.alignment = .center
         containerView.addSubview(headerLabel)
         
-        // Status items
-        var yPos = 300
+        // Subtitle with helpful context
+        let subtitleLabel = NSTextField(labelWithString: "Your task sync dashboard")
+        subtitleLabel.font = NSFont.systemFont(ofSize: 12)
+        subtitleLabel.textColor = .secondaryLabelColor
+        subtitleLabel.frame = NSRect(x: 20, y: 325, width: 460, height: 20)
+        subtitleLabel.alignment = .center
+        containerView.addSubview(subtitleLabel)
+        
+        // Status items with clearer labels
+        var yPos = 270
+        
+        // Authentication Status
+        let authStatus = (userToken != nil && !userToken!.isEmpty)
+        addStatusItem(to: containerView, title: "Account", 
+                     status: authStatus ? "Signed In" : "Not Signed In",
+                     icon: authStatus ? "✅" : "⚠️", yPos: &yPos)
+        
+        // Asana Connection
+        addStatusItem(to: containerView, title: "Asana Connection",
+                     status: asanaConnected ? "Active" : "Inactive", 
+                     icon: asanaConnected ? "✅" : "❌", yPos: &yPos)
         
         // OmniFocus Status
         addStatusItem(to: containerView, title: "OmniFocus", 
-                     status: omniFocusConnected ? "Connected" : "Disconnected",
-                     icon: omniFocusConnected ? "✅" : "❌", yPos: &yPos)
-        
-        // Asana Status  
-        addStatusItem(to: containerView, title: "AsanaBridge Service",
-                     status: asanaConnected ? "Connected" : "Disconnected", 
-                     icon: asanaConnected ? "✅" : "❌", yPos: &yPos)
+                     status: omniFocusConnected ? "Connected" : "Not Found",
+                     icon: omniFocusConnected ? "✅" : "⚠️", yPos: &yPos)
         
         // Local Agent Status
-        addStatusItem(to: containerView, title: "Local Agent",
-                     status: localServer != nil ? "Running" : "Stopped",
-                     icon: localServer != nil ? "✅" : "❌", yPos: &yPos)
+        let agentStatus = localServer != nil ? "Running" : "Stopped"
+        addStatusItem(to: containerView, title: "Sync Agent",
+                     status: agentStatus,
+                     icon: localServer != nil ? "🟢" : "🔴", yPos: &yPos)
         
-        // Action buttons
-        let syncButton = NSButton(title: "Sync Now", target: self, action: #selector(performManualSync))
-        syncButton.frame = NSRect(x: 50, y: 50, width: 100, height: 32)
+        // Add helpful info box
+        let infoBox = NSTextField(labelWithString: "💡 Tasks sync automatically every 5 minutes when all services are connected.")
+        infoBox.font = NSFont.systemFont(ofSize: 11)
+        infoBox.textColor = .secondaryLabelColor
+        infoBox.frame = NSRect(x: 30, y: yPos - 20, width: 440, height: 40)
+        infoBox.alignment = .center
+        infoBox.lineBreakMode = .byWordWrapping
+        infoBox.maximumNumberOfLines = 2
+        containerView.addSubview(infoBox)
+        
+        // Action buttons with better spacing
+        let buttonY = 60
+        let syncButton = NSButton(title: "🔄 Sync Now", target: self, action: #selector(performManualSync))
+        syncButton.frame = NSRect(x: 50, y: buttonY, width: 120, height: 32)
         syncButton.bezelStyle = .rounded
         containerView.addSubview(syncButton)
         
-        let settingsButton = NSButton(title: "Settings", target: self, action: #selector(showSettings))
-        settingsButton.frame = NSRect(x: 200, y: 50, width: 100, height: 32)
+        let settingsButton = NSButton(title: "⚙️ Settings", target: self, action: #selector(showSettings))
+        settingsButton.frame = NSRect(x: 190, y: buttonY, width: 120, height: 32)
         settingsButton.bezelStyle = .rounded
         containerView.addSubview(settingsButton)
         
         let quitButton = NSButton(title: "Quit", target: self, action: #selector(quitApp))
-        quitButton.frame = NSRect(x: 350, y: 50, width: 100, height: 32)
+        quitButton.frame = NSRect(x: 330, y: buttonY, width: 120, height: 32)
         quitButton.bezelStyle = .rounded
         containerView.addSubview(quitButton)
+        
+        // Footer with version and help
+        if let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String {
+            let footerLabel = NSTextField(labelWithString: "Version \(currentVersion) • Visit asanabridge.com for help")
+            footerLabel.font = NSFont.systemFont(ofSize: 10)
+            footerLabel.textColor = .tertiaryLabelColor
+            footerLabel.frame = NSRect(x: 20, y: 15, width: 460, height: 20)
+            footerLabel.alignment = .center
+            containerView.addSubview(footerLabel)
+        }
         
         return containerView
     }
@@ -2012,7 +2064,7 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
         titleLabel.frame = NSRect(x: 30, y: yPos, width: 150, height: 20)
         view.addSubview(titleLabel)
         
-        let statusLabel = NSTextField(labelWithString: "\\(icon) \\(status)")
+        let statusLabel = NSTextField(labelWithString: "\(icon) \(status)")
         statusLabel.font = NSFont.systemFont(ofSize: 13)
         statusLabel.frame = NSRect(x: 200, y: yPos, width: 250, height: 20)
         view.addSubview(statusLabel)
@@ -2030,11 +2082,19 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
     
     @objc func showAbout() {
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "2.2.0"
         let alert = NSAlert()
-        alert.messageText = "AsanaBridge v2.0"
-        alert.informativeText = "Connect your Asana tasks to OmniFocus automatically.\n\nBuilt with ❤️ for productivity enthusiasts.\n\nVisit asanabridge.com for support."
+        alert.messageText = "AsanaBridge v\(version)"
+        alert.informativeText = "Connect your Asana tasks to OmniFocus automatically.\n\n✨ Features:\n• Direct in-app login\n• Automatic task sync every 5 minutes\n• Menu bar status indicator\n• OmniFocus integration\n\nBuilt with ❤️ for productivity enthusiasts.\n\nVisit asanabridge.com for support."
         alert.addButton(withTitle: "OK")
-        alert.runModal()
+        alert.addButton(withTitle: "Visit Website")
+        
+        let response = alert.runModal()
+        if response == .alertSecondButtonReturn {
+            if let url = URL(string: "https://asanabridge.com") {
+                NSWorkspace.shared.open(url)
+            }
+        }
     }
     
     @objc func showPreferences() {

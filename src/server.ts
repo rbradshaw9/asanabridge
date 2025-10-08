@@ -106,7 +106,7 @@ const healthCheck = async (_req: express.Request, res: express.Response) => {
       secrets: 'unknown',
       commit: 'unknown',
       timestamp: new Date().toISOString(),
-      version: '2.2.0'
+      version: '2.2.1'
     };
     
     // Check database connection
@@ -146,7 +146,7 @@ const healthCheck = async (_req: express.Request, res: express.Response) => {
     res.json({ 
       status: 'ok',
       checks,
-      deploymentTest: 'VERSION_CHECK_SYSTEM_v2.2.0'
+      deploymentTest: 'VERSION_CHECK_SYSTEM_v2.2.1'
     });
     
   } catch (error) {

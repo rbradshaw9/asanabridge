@@ -693,7 +693,7 @@ router.get('/app/version-check', async (req: Request, res: Response) => {
     const currentVersion = req.query.current as string;
     
     // Current app version info - easily updatable
-    const latestVersion = "2.2.0";
+    const latestVersion = "2.2.1";
     const minimumVersion = "2.0.0";
     const downloadUrl = "https://asanabridge.com/api/auth/app/download/latest";
     const fileSize = 160_000; // ~160KB
@@ -741,13 +741,13 @@ router.get('/app/download/latest', async (req: Request, res: Response) => {
     logger.info('App download requested', {
       ip: clientIP,
       userAgent,
-      version: '2.2.0',
+      version: '2.2.1',
       timestamp: new Date().toISOString()
     });
     
     // Serve the actual DMG file from public/downloads
     const path = require('path');
-    const downloadPath = path.join(__dirname, '../../public/downloads/AsanaBridge-2.2.0.dmg');
+    const downloadPath = path.join(__dirname, '../../public/downloads/AsanaBridge-2.2.1.dmg');
     
     // Check if file exists
     const fs = require('fs');
@@ -762,7 +762,7 @@ router.get('/app/download/latest', async (req: Request, res: Response) => {
     
     // Set appropriate headers for file download
     res.setHeader('Content-Type', 'application/x-apple-diskimage');
-    res.setHeader('Content-Disposition', 'attachment; filename="AsanaBridge-2.2.0.dmg"');
+    res.setHeader('Content-Disposition', 'attachment; filename="AsanaBridge-2.2.1.dmg"');
     res.setHeader('Content-Length', fileSize.toString());
     res.setHeader('Cache-Control', 'public, max-age=3600'); // Cache for 1 hour
     
@@ -782,6 +782,31 @@ router.get('/app/changelog/:version?', async (req: Request, res: Response) => {
     
     // Version changelog database (in production, store in database)
     const changelogs = {
+      '2.2.1': {
+        version: '2.2.1',
+        releaseDate: '2025-10-08',
+        critical: true,
+        features: [
+          '🐛 CRITICAL FIX: Menu bar icon no longer disappears after right-click',
+          '✨ Improved status page with clearer labels and emoji indicators',
+          '🎨 Better About dialog with dynamic version info and website link',
+          '🔄 Enhanced status display - shows "Account", "Asana Connection", "OmniFocus", and "Sync Agent"',
+          '📝 Helpful info messages added to status page',
+          '⚡ Faster menu bar icon recovery with automatic retry logic'
+        ],
+        bugFixes: [
+          'Fixed menu bar icon disappearing bug (statusItem.menu = nil issue)',
+          'Fixed status page showing escaped strings like "\\(icon) \\(status)"',
+          'Added version logging for better crash diagnostics',
+          'Improved nil check handling for statusItem creation'
+        ],
+        technical: [
+          'Delayed menu cleanup to prevent statusItem removal',
+          'Fixed string interpolation in status labels',
+          'Added statusItem retry logic on creation failure',
+          'Enhanced error handling and recovery'
+        ]
+      },
       '2.2.0': {
         version: '2.2.0',
         releaseDate: '2025-10-07',
@@ -838,7 +863,7 @@ router.get('/app/changelog/:version?', async (req: Request, res: Response) => {
       }
     };
     
-    const changelog = version === 'latest' ? changelogs['2.2.0'] : changelogs[version as keyof typeof changelogs];
+    const changelog = version === 'latest' ? changelogs['2.2.1'] : changelogs[version as keyof typeof changelogs];
     
     if (!changelog) {
       return res.status(404).json({ error: 'Version not found' });
