@@ -15,6 +15,7 @@ import downloadRoutes from './routes/download';
 import deployInfoRoutes from './routes/deploy-info';
 import adminRoutes from './routes/admin';
 import supportRoutes from './routes/support';
+import diagnosticsRoutes from './routes/diagnostics';
 
 // Load environment variables first
 dotenv.config();
@@ -194,6 +195,7 @@ app.use('/api/download', downloadRoutes);
 app.use('/api/deploy', deployInfoRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/support', supportRoutes);
+app.use('/api/diagnostics', diagnosticsRoutes);
 
 // Basic API routes (will expand these)
 app.get('/api/status', (_req, res) => {

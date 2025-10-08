@@ -418,7 +418,7 @@ export class SyncEngine {
         syncMappingId: context.mappingId,
         direction: 'BIDIRECTIONAL',
         status: result.success ? 'SUCCESS' : 'ERROR',
-        itemsSynced: result.itemsProcessed,
+        itemssynced: result.itemsProcessed,
         errorMessage: result.errors.join('; ') || null
       }
     });
