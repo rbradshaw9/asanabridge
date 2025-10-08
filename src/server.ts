@@ -50,6 +50,7 @@ const generalLimiter = rateLimit({
   message: { error: 'Too many requests from this IP, please try again later.' },
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { trustProxy: true }, // Trust the X-Forwarded-For header from nginx
 });
 
 // Strict rate limiting for authentication endpoints
@@ -58,6 +59,7 @@ const authLimiter = rateLimit({
   max: 20, // Limit each IP to 20 auth requests per windowMs
   message: { error: 'Too many authentication attempts, please try again later.' },
   standardHeaders: true,
+  validate: { trustProxy: true }, // Trust the X-Forwarded-For header from nginx
   legacyHeaders: false,
 });
 
