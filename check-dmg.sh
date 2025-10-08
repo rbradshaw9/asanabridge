@@ -5,8 +5,8 @@ set -e
 
 echo "🔍 Checking for DMG file locally..."
 
-DMG_SOURCE="./omnifocus-agent/build/AsanaBridge-Installer.dmg"
-DMG_TARGET_DIR="./omnifocus-agent"
+DMG_SOURCE="./omnifocus-agent/build/AsanaBridge-2.2.0.dmg"
+DMG_TARGET_DIR="./public/downloads"
 
 if [ ! -f "$DMG_SOURCE" ]; then
     echo "⚠️  DMG file not found at $DMG_SOURCE"
