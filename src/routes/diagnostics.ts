@@ -140,7 +140,7 @@ router.get('/health', authenticateToken, async (req: AuthenticatedRequest, res: 
           createdAt: true,
           status: true,
           direction: true,
-          itemssynced: true,
+          itemsSynced: true,
           errorMessage: true
         }
       });
@@ -159,7 +159,7 @@ router.get('/health', authenticateToken, async (req: AuthenticatedRequest, res: 
           time: log.createdAt,
           status: log.status,
           direction: log.direction,
-          itemsSynced: log.itemssynced,
+          itemsSynced: log.itemsSynced,
           error: log.errorMessage
         }))
       };
