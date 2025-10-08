@@ -22,6 +22,9 @@ const env = loadEnv();
 
 const app = express();
 
+// Trust proxy - must come first when behind nginx/load balancer
+app.set('trust proxy', 1);
+
 // Security middleware - must come before other middleware
 app.use(helmet({
   contentSecurityPolicy: {
