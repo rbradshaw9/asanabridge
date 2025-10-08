@@ -13,7 +13,7 @@ router.get('/agent', authenticateToken, (req: AuthenticatedRequest, res: Respons
   const platform = 'macos';
   const arch = 'universal'; // We'll build universal binaries
   
-  const dmgPath = path.join(__dirname, '../../public/AsanaBridge-Installer.dmg');
+  const dmgPath = path.join(__dirname, '../../public/downloads/AsanaBridge-2.2.0.dmg');
   
   if (!fs.existsSync(dmgPath)) {
     return res.status(404).json({ 
@@ -23,7 +23,7 @@ router.get('/agent', authenticateToken, (req: AuthenticatedRequest, res: Respons
   }
   
   // Set headers for download
-  res.setHeader('Content-Disposition', 'attachment; filename="AsanaBridge-Installer.dmg"');
+  res.setHeader('Content-Disposition', 'attachment; filename="AsanaBridge-2.2.0.dmg"');
   res.setHeader('Content-Type', 'application/x-apple-diskimage');
   
   // Send the DMG file
