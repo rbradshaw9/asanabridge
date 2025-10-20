@@ -388,13 +388,13 @@ const Dashboard: React.FC = () => {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'AsanaBridge-2.2.1.dmg';
+      a.download = 'AsanaBridge.dmg';
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
 
-      setSuccessMessage('✅ Agent download started! Check your Downloads folder.');
+      setSuccessMessage('✅ App download started! Check your Downloads folder.');
       setTimeout(() => setSuccessMessage(''), 5000);
     } catch (err: any) {
       console.error('Download error:', err);

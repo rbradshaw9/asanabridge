@@ -10,22 +10,31 @@ const router = Router();
 router.get('/agent', authenticateToken, (req: AuthenticatedRequest, res: Response) => {
   try {
     logger.info('Agent download requested', {
-      userId: req.user?.id,
+      userId: req.user?.userId,
       email: req.user?.email
     });
 
-    // Path to the DMG file
-    const dmgPath = path.join(__dirname, '../../public/downloads/AsanaBridge-2.2.1.dmg');
+    // Always serve the latest DMG - unified installer with icon and Applications folder
+    const dmgPath = path.join(__dirname, '../../public/downloads/AsanaBridge-Latest.dmg');
 
     // Check if file exists
     if (!fs.existsSync(dmgPath)) {
-      logger.error('DMG file not found at path', { path: dmgPath });
-      return res.status(404).json({ error: 'Download file not found' });
+      logger.error('DMG file not found', { path: dmgPath });
+      return res.status(404).json({ error: 'Download file not found. Please contact support.' });
     }
+
+    // Get file stats for logging
+    const stats = fs.statSync(dmgPath);
+    logger.info('Serving DMG download', { 
+      userId: req.user?.userId, 
+      fileSize: stats.size,
+      filePath: dmgPath 
+    });
 
     // Set headers for download
     res.setHeader('Content-Type', 'application/x-apple-diskimage');
-    res.setHeader('Content-Disposition', 'attachment; filename="AsanaBridge-2.2.1.dmg"');
+    res.setHeader('Content-Disposition', 'attachment; filename="AsanaBridge.dmg"');
+    res.setHeader('Content-Length', stats.size.toString());
 
     // Stream the file
     res.sendFile(dmgPath);

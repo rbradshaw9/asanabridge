@@ -792,49 +792,35 @@ router.get('/app/version-check', async (req: Request, res: Response) => {
 });
 
 // App download endpoint - Always serves latest version
+// App download endpoint - redirect to unified download route
 router.get('/app/download/latest', async (req: Request, res: Response) => {
+  // For unauthenticated downloads (public link), serve directly
   try {
     const userAgent = req.get('User-Agent') || 'unknown';
     const clientIP = req.ip || req.connection.remoteAddress || 'unknown';
     
-    // Log download analytics
-    logger.info('App download requested', {
+    logger.info('Public app download requested', {
       ip: clientIP,
       userAgent,
-      version: '2.2.1',
       timestamp: new Date().toISOString()
     });
     
-    // Serve the actual DMG file from public/downloads
-    // Always serve AsanaBridge-Latest.dmg which is updated on each deployment
     const path = require('path');
+    const fs = require('fs');
     const downloadPath = path.join(__dirname, '../../public/downloads/AsanaBridge-Latest.dmg');
     
-    // Check if file exists
-    const fs = require('fs');
     if (!fs.existsSync(downloadPath)) {
-      // Fallback to versioned file if latest doesn't exist
-      const fallbackPath = path.join(__dirname, '../../public/downloads/AsanaBridge-v2.2.1.dmg');
-      if (fs.existsSync(fallbackPath)) {
-        logger.warn('Latest DMG not found, serving versioned file', { fallbackPath });
-        return res.download(fallbackPath, 'AsanaBridge-2.2.1.dmg');
-      }
-      
       logger.error('DMG file not found', { downloadPath });
-      return res.status(404).json({ error: 'Download file not found' });
+      return res.status(404).json({ error: 'Download file not found. Please contact support.' });
     }
     
-    // Get file stats for Content-Length
     const stats = fs.statSync(downloadPath);
-    const fileSize = stats.size;
     
-    // Set appropriate headers for file download
     res.setHeader('Content-Type', 'application/x-apple-diskimage');
-    res.setHeader('Content-Disposition', 'attachment; filename="AsanaBridge-2.2.1.dmg"');
-    res.setHeader('Content-Length', fileSize.toString());
-    res.setHeader('Cache-Control', 'public, max-age=3600'); // Cache for 1 hour
+    res.setHeader('Content-Disposition', 'attachment; filename="AsanaBridge.dmg"');
+    res.setHeader('Content-Length', stats.size.toString());
+    res.setHeader('Cache-Control', 'public, max-age=3600');
     
-    // Stream the file
     res.sendFile(downloadPath);
     
   } catch (error) {
