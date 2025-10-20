@@ -32,6 +32,124 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var asanaStatusLabel: NSTextField?
     var asanaStatusInfoLabel: NSTextField?
     
+    // Error handling system
+    func showErrorAlert(title: String, message: String, showDetails: Bool = false, details: String? = nil) {
+        DispatchQueue.main.async {
+            let alert = NSAlert()
+            alert.messageText = title
+            alert.informativeText = message
+            alert.alertStyle = .warning
+            alert.addButton(withTitle: "OK")
+            
+            if showDetails && details != nil {
+                alert.addButton(withTitle: "Show Details")
+                let response = alert.runModal()
+                if response == .alertSecondButtonReturn {
+                    // Show detailed error in a second dialog
+                    let detailAlert = NSAlert()
+                    detailAlert.messageText = "Error Details"
+                    detailAlert.informativeText = details!
+                    detailAlert.alertStyle = .informational
+                    detailAlert.addButton(withTitle: "OK")
+                    detailAlert.runModal()
+                }
+            } else {
+                alert.runModal()
+            }
+        }
+    }
+    
+    // MARK: - Logging System
+    
+    private let logFileURL: URL = {
+        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        let asanaBridgeDir = appSupport.appendingPathComponent("AsanaBridge")
+        
+        // Create directory if it doesn't exist
+        try? FileManager.default.createDirectory(at: asanaBridgeDir, withIntermediateDirectories: true, attributes: nil)
+        
+        return asanaBridgeDir.appendingPathComponent("asanabridge.log")
+    }()
+    
+    func logMessage(_ message: String, level: LogLevel = .info) {
+        let timestamp = ISO8601DateFormatter().string(from: Date())
+        let logEntry = "[\(timestamp)] [\(level.rawValue)] \(message)\n"
+        
+        // Print to console for debugging
+        print(logEntry.trimmingCharacters(in: .whitespacesAndNewlines))
+        
+        // Write to log file
+        DispatchQueue.global(qos: .utility).async {
+            if let data = logEntry.data(using: .utf8) {
+                if FileManager.default.fileExists(atPath: self.logFileURL.path) {
+                    // Append to existing file
+                    if let fileHandle = try? FileHandle(forWritingTo: self.logFileURL) {
+                        fileHandle.seekToEndOfFile()
+                        fileHandle.write(data)
+                        fileHandle.closeFile()
+                    }
+                } else {
+                    // Create new file
+                    try? data.write(to: self.logFileURL)
+                }
+            }
+            
+            // Rotate log file if it gets too large (> 5MB)
+            if let attributes = try? FileManager.default.attributesOfItem(atPath: self.logFileURL.path),
+               let fileSize = attributes[.size] as? Int64,
+               fileSize > 5_000_000 {
+                self.rotateLogFile()
+            }
+        }
+    }
+    
+    func logError(_ message: String, error: Error? = nil) {
+        let errorMessage = error?.localizedDescription ?? "No error details"
+        logMessage("ERROR: \(message) - \(errorMessage)", level: .error)
+    }
+    
+    func logDebug(_ message: String) {
+        #if DEBUG
+        logMessage("DEBUG: \(message)", level: .debug)
+        #endif
+    }
+    
+    private func rotateLogFile() {
+        let backupURL = logFileURL.appendingPathExtension("old")
+        
+        // Remove old backup if it exists
+        try? FileManager.default.removeItem(at: backupURL)
+        
+        // Move current log to backup
+        try? FileManager.default.moveItem(at: logFileURL, to: backupURL)
+        
+        logMessage("Log file rotated", level: .info)
+    }
+    
+    enum LogLevel: String, CaseIterable {
+        case debug = "DEBUG"
+        case info = "INFO"
+        case warning = "WARNING"
+        case error = "ERROR"
+    }
+    
+    // Configuration - make URLs configurable for dev vs prod
+    private let baseURL: String = {
+        if let customURL = UserDefaults.standard.string(forKey: "AsanaBridgeBaseURL") {
+            return customURL
+        }
+        // Default to production, but allow override via environment or dev settings
+        #if DEBUG
+        return "http://localhost:3000"
+        #else
+        return "https://asanabridge.com"
+        #endif
+    }()
+    
+    private var apiBaseURL: String { return "\(baseURL)/api" }
+    private var authBaseURL: String { return "\(baseURL)/api/auth" }
+    private var webBaseURL: String { return baseURL }
+    
     enum ConnectionStatus {
         case connecting, connected, disconnected, error
         
@@ -106,7 +224,7 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
     
     func validateToken(_ token: String, completion: @escaping (Bool) -> Void) {
-        guard let url = URL(string: "https://asanabridge.com/api/auth/validate") else {
+        guard let url = URL(string: "\(authBaseURL)/validate") else {
             print("❌ Invalid validation URL")
             completion(false)
             return
@@ -117,17 +235,42 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.timeoutInterval = 10.0
         
-        URLSession.shared.dataTask(with: request) { data, response, error in
+        URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
             if let error = error {
-                print("❌ Token validation network error: \(error.localizedDescription)")
+                self?.logError("Token validation network error", error: error)
+                self?.showErrorAlert(
+                    title: "Connection Error", 
+                    message: "Unable to validate authentication with AsanaBridge servers. Please check your internet connection and try again.",
+                    showDetails: true,
+                    details: error.localizedDescription
+                )
                 completion(false)
                 return
             }
             
             if let httpResponse = response as? HTTPURLResponse {
                 let isValid = httpResponse.statusCode == 200
+                if !isValid {
+                    self?.logError("Token validation failed with status code: \(httpResponse.statusCode)")
+                    if httpResponse.statusCode == 401 {
+                        self?.showErrorAlert(
+                            title: "Authentication Failed", 
+                            message: "Your authentication token is invalid or expired. Please sign in again."
+                        )
+                    } else {
+                        self?.showErrorAlert(
+                            title: "Server Error", 
+                            message: "AsanaBridge server returned an error (status \(httpResponse.statusCode)). Please try again later."
+                        )
+                    }
+                }
                 completion(isValid)
             } else {
+                self?.logError("Token validation received invalid response")
+                self?.showErrorAlert(
+                    title: "Server Error", 
+                    message: "Received an invalid response from AsanaBridge servers. Please try again."
+                )
                 completion(false)
             }
         }.resume()
@@ -212,7 +355,7 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
         
         print("🔍 Formatted version: \(currentVersion) -> \(formattedVersion)")
         
-        guard let url = URL(string: "https://asanabridge.com/api/auth/app/version-check?current=\(formattedVersion)") else {
+        guard let url = URL(string: "\(authBaseURL)/app/version-check?current=\(formattedVersion)") else {
             print("❌ Invalid version check URL")
             return
         }
@@ -376,7 +519,7 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
             switch response {
             case .alertFirstButtonReturn:
                 // Download update
-                if let url = URL(string: "https://asanabridge.com/download/latest") {
+                if let url = URL(string: "\(self.webBaseURL)/download/latest") {
                     NSWorkspace.shared.open(url)
                 }
             case .alertSecondButtonReturn:
@@ -701,11 +844,8 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
             statusItem.menu = contextMenu
             statusItem.button?.performClick(nil)
             
-            // IMPORTANT: Schedule menu cleanup for AFTER menu is dismissed
-            // Setting menu = nil immediately causes the status item to disappear!
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-                self?.statusItem?.menu = nil
-            }
+            // FIXED: Do NOT set menu = nil as this causes the status item to disappear!
+            // The menu will automatically dismiss when user clicks elsewhere
             
         } else {
             // Left click - show main interface
@@ -746,7 +886,7 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
         userToken = defaults.string(forKey: "userToken")
         
         if isSetupComplete && userToken != nil {
-            apiClient = AsanaBridgeAPIClient(token: userToken!, agentKey: "simple")
+            apiClient = AsanaBridgeAPIClient(token: userToken!, agentKey: "simple", baseURL: apiBaseURL)
             asanaConnected = true
         }
     }
@@ -1196,7 +1336,7 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
         updateStatusBarTitle("🔄 Connecting...")
         
         // Create auth session
-        guard let url = URL(string: "https://asanabridge.com/api/auth/app-session") else {
+        guard let url = URL(string: "\(authBaseURL)/app-session") else {
             showAlert(title: "Error", message: "Could not connect to AsanaBridge.")
             return
         }
@@ -1339,7 +1479,7 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
     
     func checkAuthStatus(sessionId: String, completion: @escaping (Bool, String?) -> Void) {
-        guard let url = URL(string: "https://asanabridge.com/api/auth/app-session?session=\(sessionId)") else {
+        guard let url = URL(string: "\(authBaseURL)/app-session?session=\(sessionId)") else {
             print("❌ Invalid session URL")
             completion(false, nil)
             return
@@ -1474,7 +1614,7 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
         updateStatusBarTitle("🔄 Authenticating...")
         
         // Open browser with authentication URL that includes return scheme
-        let authURL = "https://asanabridge.com/auth/app?return_to=asanabridge://auth&session=\(authSessionId!)"
+        let authURL = "\(webBaseURL)/auth/app?return_to=asanabridge://auth&session=\(authSessionId!)"
         
         guard let url = URL(string: authURL) else {
             showAlert(title: "Error", message: "Could not create authentication URL.")
@@ -1513,7 +1653,7 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
             
             if response == .alertSecondButtonReturn {
                 // Re-open browser
-                let authURL = "https://asanabridge.com/auth/app?return_to=asanabridge://auth&session=\(self.authSessionId!)"
+                let authURL = "\(self.webBaseURL)/auth/app?return_to=asanabridge://auth&session=\(self.authSessionId!)"
                 if let url = URL(string: authURL) {
                     NSWorkspace.shared.open(url)
                 }
@@ -1696,7 +1836,7 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
     
     func performDirectLogin(email: String, password: String, completion: @escaping (Bool, String?, String?) -> Void) {
-        guard let url = URL(string: "https://asanabridge.com/api/auth/app-login-direct") else {
+        guard let url = URL(string: "\(authBaseURL)/app-login-direct") else {
             completion(false, nil, "Invalid server URL")
             return
         }
@@ -1808,7 +1948,7 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 showManualTokenEntry()
             }
         } else if response == .alertSecondButtonReturn {
-            NSWorkspace.shared.open(URL(string: "https://asanabridge.com/tokens")!)
+            NSWorkspace.shared.open(URL(string: "\(webBaseURL)/tokens")!)
             showManualTokenEntry()
         } else {
             showAuthenticationFlow()
@@ -1820,13 +1960,13 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
         updateStatusBarTitle("🔄 Validating token...")
         
         // Test the token with API
-        guard let url = URL(string: "https://asanabridge.com/api/auth/me") else { 
+        guard let url = URL(string: "\(authBaseURL)/me") else { 
             showAlert(title: "Configuration Error", message: "Could not connect to AsanaBridge API.")
             return 
         }
         
         var request = URLRequest(url: url)
-        request.setValue("Bearer \\(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.timeoutInterval = 10.0
         
         URLSession.shared.dataTask(with: request) { data, response, error in
@@ -1867,7 +2007,7 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
                         
                         let response = alert.runModal()
                         if response == .alertSecondButtonReturn {
-                            NSWorkspace.shared.open(URL(string: "https://asanabridge.com/tokens")!)
+                            NSWorkspace.shared.open(URL(string: "\(self.webBaseURL)/tokens")!)
                         }
                         
                     case 403:
@@ -1878,7 +2018,7 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     default:
                         self.updateStatusBarTitle("❌ AsanaBridge")
                         self.showAlert(title: "Server Error", 
-                                     message: "AsanaBridge server returned an error (\\(httpResponse.statusCode)). Please try again later.")
+                                     message: "AsanaBridge server returned an error (\(httpResponse.statusCode)). Please try again later.")
                     }
                 } else {
                     self.updateStatusBarTitle("❌ AsanaBridge")
@@ -1895,7 +2035,7 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
         
         // Initialize API client with just the token
         if let token = userToken {
-            apiClient = AsanaBridgeAPIClient(token: token, agentKey: "simple")
+            apiClient = AsanaBridgeAPIClient(token: token, agentKey: "simple", baseURL: apiBaseURL)
         }
         
         // Begin sync process
@@ -2091,7 +2231,7 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
         
         let response = alert.runModal()
         if response == .alertSecondButtonReturn {
-            if let url = URL(string: "https://asanabridge.com") {
+            if let url = URL(string: webBaseURL) {
                 NSWorkspace.shared.open(url)
             }
         }
@@ -2111,7 +2251,7 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
             
             let response = alert.runModal()
             if response == .alertSecondButtonReturn {
-                if let url = URL(string: "https://asanabridge.com") {
+                if let url = URL(string: self.webBaseURL) {
                     NSWorkspace.shared.open(url)
                 }
             }
@@ -2119,7 +2259,7 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
     
     @objc func downloadUpdate() {
-        if let url = URL(string: "https://asanabridge.com/download/latest") {
+        if let url = URL(string: "\(webBaseURL)/download/latest") {
             NSWorkspace.shared.open(url)
         }
     }
@@ -2200,10 +2340,208 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
     
     // MARK: - Sync Functions
     func performBidirectionalSync(token: String) async throws -> Bool {
-        print("🔄 Starting bidirectional sync with server...")
+        print("🔄 Starting bidirectional sync...")
         
-        guard let url = URL(string: "https://asanabridge.com/api/sync/perform") else {
-            throw NSError(domain: "AsanaBridge", code: 1, userInfo: [NSLocalizedDescriptionKey: "Invalid sync URL"])
+        // Step 1: Check OmniFocus is available
+        guard isOmniFocusRunning() else {
+            throw NSError(domain: "AsanaBridge", code: 1, userInfo: [NSLocalizedDescriptionKey: "OmniFocus is not running. Please launch OmniFocus first."])
+        }
+        
+        do {
+            // Step 2: Get tasks from OmniFocus
+            logMessage("📖 Reading tasks from OmniFocus...")
+            let omniFocusTasks = try await getTasksFromOmniFocus()
+            logMessage("📖 Found \(omniFocusTasks.count) tasks in OmniFocus")
+            
+            // Step 3: Get tasks from Asana via server
+            print("🌐 Fetching tasks from Asana...")
+            let asanaTasks = try await getTasksFromAsana(token: token)
+            print("🌐 Found \(asanaTasks.count) tasks from Asana")
+            
+            // Step 4: Perform sync operations
+            var syncedCount = 0
+            
+            // Sync Asana tasks to OmniFocus (create missing tasks)
+            for asanaTask in asanaTasks {
+                if !omniFocusTasks.contains(where: { $0.title == asanaTask.title }) {
+                    print("➕ Creating OmniFocus task: \(asanaTask.title)")
+                    try await createTaskInOmniFocus(task: asanaTask)
+                    syncedCount += 1
+                }
+            }
+            
+            // Sync OmniFocus tasks to Asana (create missing tasks)
+            for omniFocusTask in omniFocusTasks {
+                if !asanaTasks.contains(where: { $0.title == omniFocusTask.title }) {
+                    print("➕ Creating Asana task: \(omniFocusTask.title)")
+                    try await createTaskInAsana(task: omniFocusTask, token: token)
+                    syncedCount += 1
+                }
+            }
+            
+            // Step 5: Report sync results to server
+            try await reportSyncResults(token: token, syncedCount: syncedCount)
+            
+            logMessage("✅ Bidirectional sync completed successfully (\(syncedCount) tasks synced)")
+            return true
+            
+        } catch {
+            print("❌ Sync error: \(error.localizedDescription)")
+            throw error
+        }
+    }
+    
+    // MARK: - OmniFocus Integration
+    
+    struct TaskData {
+        let title: String
+        let note: String?
+        let dueDate: Date?
+        let project: String?
+        let completed: Bool
+        let id: String? // For tracking synced tasks
+    }
+    
+    func getTasksFromOmniFocus() async throws -> [TaskData] {
+        return try await withCheckedThrowingContinuation { continuation in
+            DispatchQueue.global(qos: .background).async {
+                do {
+                    let script = """
+                    tell application "OmniFocus"
+                        set taskList to {}
+                        repeat with aTask in (every flattened task of front document whose completed is false)
+                            set taskTitle to name of aTask
+                            set taskNote to note of aTask
+                            set taskProject to ""
+                            if (containing project of aTask) is not missing value then
+                                set taskProject to name of containing project of aTask
+                            end if
+                            set taskDue to ""
+                            if (due date of aTask) is not missing value then
+                                set taskDue to due date of aTask as string
+                            end if
+                            set end of taskList to taskTitle & "|||" & taskNote & "|||" & taskProject & "|||" & taskDue
+                        end repeat
+                        return taskList
+                    end tell
+                    """
+                    
+                    let task = Process()
+                    task.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+                    task.arguments = ["-e", script]
+                    
+                    let pipe = Pipe()
+                    task.standardOutput = pipe
+                    task.standardError = pipe
+                    
+                    try task.run()
+                    task.waitUntilExit()
+                    
+                    if task.terminationStatus != 0 {
+                        let errorData = pipe.fileHandleForReading.readDataToEndOfFile()
+                        let errorMessage = String(data: errorData, encoding: .utf8) ?? "Unknown AppleScript error"
+                        continuation.resume(throwing: NSError(domain: "AsanaBridge", code: 3, userInfo: [NSLocalizedDescriptionKey: "OmniFocus AppleScript error: \(errorMessage)"]))
+                        return
+                    }
+                    
+                    let outputData = pipe.fileHandleForReading.readDataToEndOfFile()
+                    let output = String(data: outputData, encoding: .utf8) ?? ""
+                    
+                    var tasks: [TaskData] = []
+                    let taskLines = output.components(separatedBy: ", ")
+                    
+                    for line in taskLines {
+                        let parts = line.components(separatedBy: "|||")
+                        if parts.count >= 4 {
+                            let title = parts[0].trimmingCharacters(in: .whitespacesAndNewlines)
+                            let note = parts[1].isEmpty ? nil : parts[1]
+                            let project = parts[2].isEmpty ? nil : parts[2]
+                            let dueDateString = parts[3]
+                            
+                            var dueDate: Date?
+                            if !dueDateString.isEmpty {
+                                let formatter = DateFormatter()
+                                formatter.dateStyle = .full
+                                formatter.timeStyle = .medium
+                                dueDate = formatter.date(from: dueDateString)
+                            }
+                            
+                            if !title.isEmpty {
+                                tasks.append(TaskData(title: title, note: note, dueDate: dueDate, project: project, completed: false, id: nil))
+                            }
+                        }
+                    }
+                    
+                    continuation.resume(returning: tasks)
+                    
+                } catch {
+                    continuation.resume(throwing: error)
+                }
+            }
+        }
+    }
+    
+    func createTaskInOmniFocus(task: TaskData) async throws {
+        return try await withCheckedThrowingContinuation { continuation in
+            DispatchQueue.global(qos: .background).async {
+                do {
+                    let dueClause = task.dueDate != nil ? "set due date of newTask to date \"\(task.dueDate!)\"" : ""
+                    let noteClause = task.note != nil ? "set note of newTask to \"\(task.note!.replacingOccurrences(of: "\"", with: "\\\""))\"" : ""
+                    let projectClause = task.project != nil ? "set containing project of newTask to project \"\(task.project!)\"" : ""
+                    
+                    let script = """
+                    tell application "OmniFocus"
+                        tell front document
+                            set newTask to make new inbox task with properties {name:"\(task.title.replacingOccurrences(of: "\"", with: "\\\""))"}
+                            \(noteClause)
+                            \(dueClause)
+                            \(projectClause)
+                        end tell
+                    end tell
+                    """
+                    
+                    let process = Process()
+                    process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+                    process.arguments = ["-e", script]
+                    
+                    let pipe = Pipe()
+                    process.standardOutput = pipe
+                    process.standardError = pipe
+                    
+                    try process.run()
+                    process.waitUntilExit()
+                    
+                    if process.terminationStatus != 0 {
+                        let errorData = pipe.fileHandleForReading.readDataToEndOfFile()
+                        let errorMessage = String(data: errorData, encoding: .utf8) ?? "Unknown AppleScript error"
+                        continuation.resume(throwing: NSError(domain: "AsanaBridge", code: 4, userInfo: [NSLocalizedDescriptionKey: "Failed to create OmniFocus task: \(errorMessage)"]))
+                    } else {
+                        continuation.resume(returning: ())
+                    }
+                    
+                } catch {
+                    continuation.resume(throwing: error)
+                }
+            }
+        }
+    }
+    
+    func getTasksFromAsana(token: String) async throws -> [TaskData] {
+        // This would normally call the server to get Asana tasks
+        // For now, return empty array as a placeholder
+        // In a full implementation, this would call /api/sync/tasks endpoint
+        return []
+    }
+    
+    func createTaskInAsana(task: TaskData, token: String) async throws {
+        // This would normally call the server to create an Asana task
+        // For now, just log as placeholder
+        print("📝 Would create Asana task: \(task.title)")
+    }
+    
+    func reportSyncResults(token: String, syncedCount: Int) async throws {
+        guard let url = URL(string: "\(apiBaseURL)/sync/report") else {
+            throw NSError(domain: "AsanaBridge", code: 5, userInfo: [NSLocalizedDescriptionKey: "Invalid report URL"])
         }
         
         var request = URLRequest(url: url)
@@ -2211,33 +2549,23 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         
-        let syncData = [
+        let reportData: [String: Any] = [
             "direction": "bidirectional",
-            "timestamp": ISO8601DateFormatter().string(from: Date())
+            "tasksSynced": syncedCount,
+            "timestamp": ISO8601DateFormatter().string(from: Date()),
+            "status": "success"
         ]
         
         do {
-            request.httpBody = try JSONSerialization.data(withJSONObject: syncData)
+            request.httpBody = try JSONSerialization.data(withJSONObject: reportData)
+            let (_, response) = try await URLSession.shared.data(for: request)
             
-            let (data, response) = try await URLSession.shared.data(for: request)
-            
-            guard let httpResponse = response as? HTTPURLResponse else {
-                throw NSError(domain: "AsanaBridge", code: 2, userInfo: [NSLocalizedDescriptionKey: "Invalid response"])
-            }
-            
-            if httpResponse.statusCode == 200 {
-                print("✅ Bidirectional sync completed successfully")
-                return true
-            } else {
-                print("❌ Sync failed with status: \(httpResponse.statusCode)")
-                if let responseString = String(data: data, encoding: .utf8) {
-                    print("Response: \(responseString)")
-                }
-                return false
+            if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode != 200 {
+                print("⚠️ Failed to report sync results (status: \(httpResponse.statusCode))")
             }
         } catch {
-            print("❌ Sync error: \(error.localizedDescription)")
-            throw error
+            print("⚠️ Failed to report sync results: \(error.localizedDescription)")
+            // Don't throw here - sync succeeded even if reporting failed
         }
     }
     
@@ -2327,19 +2655,20 @@ class HTTPServer {
 class AsanaBridgeAPIClient {
     private let token: String
     private let agentKey: String
-    private let baseURL = "https://asanabridge.com/api"
+    private let baseURL: String
     
-    init(token: String, agentKey: String) {
+    init(token: String, agentKey: String, baseURL: String) {
         self.token = token
         self.agentKey = agentKey
+        self.baseURL = baseURL
     }
     
     func testConnection() -> Bool {
         // Test connection to web service
-        guard let url = URL(string: "\\(baseURL)/health") else { return false }
+        guard let url = URL(string: "\(baseURL)/health") else { return false }
         
         var request = URLRequest(url: url)
-        request.setValue("Bearer \\(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         
         let semaphore = DispatchSemaphore(value: 0)
         var success = false

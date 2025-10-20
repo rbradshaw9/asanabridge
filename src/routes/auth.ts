@@ -391,6 +391,66 @@ router.get('/app-session', async (req: Request, res: Response) => {
   }
 });
 
+// Get current user info endpoint for desktop app (same as /api/auth/me)
+router.get('/me', async (req: Request, res: Response) => {
+  try {
+    const authHeader = req.headers.authorization;
+    
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'No valid authorization header' });
+    }
+    
+    const token = authHeader.substring(7); // Remove 'Bearer ' prefix
+    
+    if (!token || token.length < 10) {
+      return res.status(401).json({ error: 'Invalid token format' });
+    }
+    
+    // Verify JWT token
+    try {
+      const decoded = jwt.verify(token, env.JWT_SECRET) as any;
+      
+      // Get user details
+      const user = await prisma.user.findUnique({
+        where: { id: decoded.userId },
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          plan: true,
+          isAdmin: true,
+          createdAt: true,
+          updatedAt: true
+        }
+      });
+      
+      if (!user) {
+        return res.status(401).json({ error: 'User not found' });
+      }
+      
+      res.json({ 
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          plan: user.plan,
+          isAdmin: user.isAdmin,
+          createdAt: user.createdAt,
+          updatedAt: user.updatedAt
+        }
+      });
+      
+    } catch (jwtError) {
+      logger.warn('Invalid JWT token provided to /me endpoint', { error: jwtError });
+      res.status(401).json({ error: 'Invalid or expired token' });
+    }
+    
+  } catch (error) {
+    logger.error('User info fetch error', error);
+    res.status(500).json({ error: 'Failed to fetch user info' });
+  }
+});
+
 // Token validation endpoint for desktop app
 router.get('/validate', async (req: Request, res: Response) => {
   try {
