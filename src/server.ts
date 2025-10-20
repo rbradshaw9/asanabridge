@@ -51,17 +51,27 @@ const generalLimiter = rateLimit({
   message: { error: 'Too many requests from this IP, please try again later.' },
   standardHeaders: true,
   legacyHeaders: false,
-  validate: { trustProxy: true }, // Trust the X-Forwarded-For header from nginx
+  validate: { 
+    trustProxy: true, // Trust the X-Forwarded-For header from nginx
+    xForwardedForHeader: false // Disable X-Forwarded-For validation warnings
+  },
+  skip: (req) => {
+    // Skip rate limiting for health checks
+    return req.path === '/health' || req.path === '/live';
+  }
 });
 
 // Strict rate limiting for authentication endpoints
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 20, // Limit each IP to 20 auth requests per windowMs
+  max: 50, // Increased from 20 to 50 for better UX
   message: { error: 'Too many authentication attempts, please try again later.' },
   standardHeaders: true,
-  validate: { trustProxy: true }, // Trust the X-Forwarded-For header from nginx
   legacyHeaders: false,
+  validate: { 
+    trustProxy: true, // Trust the X-Forwarded-For header from nginx
+    xForwardedForHeader: false // Disable X-Forwarded-For validation warnings
+  },
 });
 
 // Apply general rate limiting to all requests
@@ -95,8 +105,31 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true }));
+
+// Request parsing middleware with increased limits and timeout
+app.use(express.json({ 
+  limit: '10mb',
+  strict: true,
+  type: 'application/json'
+}));
+app.use(express.urlencoded({ 
+  extended: true, 
+  limit: '10mb',
+  parameterLimit: 1000
+}));
+
+// Set request timeout (30 seconds)
+app.use((req, res, next) => {
+  res.setTimeout(30000, () => {
+    logger.warn('Request timeout', { 
+      url: req.url, 
+      method: req.method,
+      ip: req.ip 
+    });
+    res.status(408).json({ error: 'Request timeout' });
+  });
+  next();
+});
 
 // Health check endpoints
 const healthCheck = async (_req: express.Request, res: express.Response) => {
@@ -219,10 +252,25 @@ app.get('*', (_req, res) => {
 });
 
 // Global error handler
-app.use((error: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-  logger.error('Unhandled error', error);
-  res.status(500).json({ 
-    error: env.NODE_ENV === 'production' ? 'Internal server error' : error.message 
+app.use((error: any, req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  // Log error with request context
+  logger.error('Unhandled error', {
+    error: error.message,
+    stack: error.stack,
+    url: req.url,
+    method: req.method,
+    ip: req.ip,
+    userAgent: req.get('User-Agent')
+  });
+
+  // Send appropriate error response
+  if (res.headersSent) {
+    return; // Response already sent
+  }
+  
+  res.status(error.status || 500).json({ 
+    error: env.NODE_ENV === 'production' ? 'Internal server error' : error.message,
+    requestId: req.get('X-Request-ID') || 'unknown'
   });
 });
 
