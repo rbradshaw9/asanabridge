@@ -292,6 +292,7 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
         storedAuthToken = nil
         UserDefaults.standard.removeObject(forKey: "userToken")
         UserDefaults.standard.set(false, forKey: "setupComplete")
+        UserDefaults.standard.synchronize() // Force immediate save to ensure token is cleared
         asanaConnected = false
         isSetupComplete = false
         updateStatusBarTitle("❌ AsanaBridge")
@@ -811,11 +812,15 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
         refreshItem.target = self
         contextMenu.addItem(refreshItem)
         
-        // Disconnect option (only show if connected)
+        // Disconnect/Sign Out option (always visible for easy account switching)
         if userToken != nil {
-            let disconnectItem = NSMenuItem(title: "Disconnect from Bridge", action: #selector(disconnectFromBridge), keyEquivalent: "")
+            let disconnectItem = NSMenuItem(title: "Sign Out...", action: #selector(disconnectFromBridge), keyEquivalent: "")
             disconnectItem.target = self
             contextMenu.addItem(disconnectItem)
+        } else {
+            let connectItem = NSMenuItem(title: "Sign In...", action: #selector(showLoginForm), keyEquivalent: "")
+            connectItem.target = self
+            contextMenu.addItem(connectItem)
         }
         
         contextMenu.addItem(NSMenuItem.separator())
@@ -1752,7 +1757,7 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
     
-    func showLoginForm() {
+    @objc func showLoginForm() {
         // Create a modal window for login
         let loginWindow = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 400, height: 350),
@@ -2358,9 +2363,9 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
     
     @objc func disconnectFromBridge() {
         let alert = NSAlert()
-        alert.messageText = "Disconnect from AsanaBridge?"
-        alert.informativeText = "This will stop syncing tasks. You can reconnect anytime by clicking 'Connect to AsanaBridge'."
-        alert.addButton(withTitle: "Disconnect")
+        alert.messageText = "Sign Out of AsanaBridge?"
+        alert.informativeText = "This will stop syncing tasks and clear your local authentication. You can sign in again anytime to reconnect with the same or a different account."
+        alert.addButton(withTitle: "Sign Out")
         alert.addButton(withTitle: "Cancel")
         
         let response = alert.runModal()
@@ -2394,11 +2399,23 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 self?.clearTokenAndReset()
                 self?.updateMenuBarMenu()
                 
-                // Show success notification
+                // Show success message with option to sign in again
+                let successAlert = NSAlert()
+                successAlert.messageText = "Signed Out Successfully"
+                successAlert.informativeText = "You've been signed out of AsanaBridge. Would you like to sign in with a different account?"
+                successAlert.addButton(withTitle: "Sign In")
+                successAlert.addButton(withTitle: "Later")
+                
+                let signInResponse = successAlert.runModal()
+                if signInResponse == .alertFirstButtonReturn {
+                    self?.showLoginForm()
+                }
+                
+                // Also show notification
                 let center = UNUserNotificationCenter.current()
                 let content = UNMutableNotificationContent()
-                content.title = "Disconnected"
-                content.body = "You've been disconnected from AsanaBridge. Open the app to reconnect."
+                content.title = "Signed Out"
+                content.body = "You've been signed out of AsanaBridge. Open the app to sign in again."
                 
                 let request = UNNotificationRequest(
                     identifier: "asanabridge-disconnect-\(Date().timeIntervalSince1970)",
