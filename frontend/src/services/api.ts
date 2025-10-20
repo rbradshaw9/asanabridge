@@ -159,6 +159,9 @@ export const authApi = {
 
   disconnectAgent: () =>
     api.post('/agent/disconnect'),
+
+  triggerSync: (mappingId: string) =>
+    api.post(`/sync/mappings/${mappingId}/sync`),
 };
 
 export default api;

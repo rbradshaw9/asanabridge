@@ -277,6 +277,34 @@ const Dashboard: React.FC = () => {
     }
   };
 
+  const handleSyncNow = async () => {
+    if (syncMappings.length === 0) {
+      setError('No projects configured for sync');
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+    setSuccessMessage('');
+
+    try {
+      // Trigger sync for all active mappings
+      const syncPromises = syncMappings.map(mapping => 
+        authApi.triggerSync(mapping.id)
+      );
+      
+      await Promise.all(syncPromises);
+      
+      setSuccessMessage(`✅ Sync completed for ${syncMappings.length} project(s)!`);
+      setTimeout(() => setSuccessMessage(''), 5000);
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Sync failed. Please try again.');
+      setTimeout(() => setError(''), 5000);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const loadAsanaProjects = async () => {
     try {
       const response = await authApi.getAsanaProjects();
@@ -622,7 +650,7 @@ const Dashboard: React.FC = () => {
           </div>
 
           <div className="bg-white/10 backdrop-blur-md rounded-xl p-6 border border-white/20">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between mb-3">
               <div>
                 <p className="text-gray-400 text-sm">Active Syncs</p>
                 <p className="text-2xl font-bold text-white">{syncMappings.length}</p>
@@ -636,6 +664,16 @@ const Dashboard: React.FC = () => {
                 <Activity className="text-purple-400" size={24} />
               </div>
             </div>
+            {syncMappings.length > 0 && agentStatus.connected && asanaConnected && (
+              <button
+                onClick={handleSyncNow}
+                disabled={loading}
+                className="w-full bg-purple-600 hover:bg-purple-700 disabled:bg-purple-600/50 disabled:cursor-not-allowed text-white font-semibold py-2 px-4 rounded-lg transition duration-200 flex items-center justify-center gap-2 text-sm"
+              >
+                <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+                {loading ? 'Syncing...' : 'Sync Now'}
+              </button>
+            )}
           </div>
         </div>
 
