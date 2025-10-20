@@ -436,6 +436,37 @@ router.post('/generate-key', authenticateToken, async (req: AuthenticatedRequest
   }
 });
 
+// Test endpoint: Submit a test task from OmniFocus
+router.post('/test-task', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const { taskName, taskNotes, projectName } = req.body;
+
+    logger.info('Test task received from agent', {
+      userId,
+      taskName,
+      taskNotes,
+      projectName,
+      timestamp: new Date().toISOString()
+    });
+
+    // Just log it, don't actually sync to Asana
+    res.json({ 
+      success: true,
+      message: 'Test task received successfully',
+      taskData: { taskName, taskNotes, projectName },
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    logger.error('Test task submission failed:', error);
+    res.status(500).json({ error: 'Failed to process test task' });
+  }
+});
+
 // Get agent status for user
 router.get('/status', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {

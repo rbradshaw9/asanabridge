@@ -927,6 +927,9 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc func openMainWindow() {
         print("🪟 Opening main window...")
         
+        // Activate app first
+        NSApp.activate(ignoringOtherApps: true)
+        
         // Check if user is authenticated
         if userToken == nil || userToken!.isEmpty {
             print("🔑 User not authenticated - showing login form")
@@ -977,13 +980,16 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
         
         setupWindow?.title = "AsanaBridge Setup"
         setupWindow?.center()
-        setupWindow?.level = .normal
+        setupWindow?.level = .floating
+        setupWindow?.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         
         let setupView = createSetupView()
         setupWindow?.contentView = setupView
         
-        setupWindow?.makeKeyAndOrderFront(nil)
+        // Activate app and bring window to front
         NSApp.activate(ignoringOtherApps: true)
+        setupWindow?.makeKeyAndOrderFront(nil)
+        setupWindow?.orderFrontRegardless()
     }
     
     func createSetupView() -> NSView {
