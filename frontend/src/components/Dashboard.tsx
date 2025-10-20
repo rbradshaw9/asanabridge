@@ -664,11 +664,12 @@ const Dashboard: React.FC = () => {
                 <Activity className="text-purple-400" size={24} />
               </div>
             </div>
-            {syncMappings.length > 0 && agentStatus.connected && asanaConnected && (
+            {syncMappings.length > 0 && agentStatus.connected && (
               <button
                 onClick={handleSyncNow}
                 disabled={loading}
                 className="w-full bg-purple-600 hover:bg-purple-700 disabled:bg-purple-600/50 disabled:cursor-not-allowed text-white font-semibold py-2 px-4 rounded-lg transition duration-200 flex items-center justify-center gap-2 text-sm"
+                title={!asanaConnected ? 'Asana is currently offline, but you can still test sync' : 'Trigger sync now'}
               >
                 <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
                 {loading ? 'Syncing...' : 'Sync Now'}
