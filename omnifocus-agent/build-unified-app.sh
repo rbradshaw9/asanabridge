@@ -76,9 +76,18 @@ cat > "$APP_PATH/Contents/Info.plist" << 'EOF'
 </plist>
 EOF
 
-# Create app icon (using SF Symbols or text)
+# Copy app icon if it exists
 echo "🎨 Adding app icon..."
-# For now, we'll use a simple icon - in production you'd add a proper .icns file
+if [ -f "$SCRIPT_DIR/AsanaBridge.icns" ]; then
+    cp "$SCRIPT_DIR/AsanaBridge.icns" "$APP_PATH/Contents/Resources/"
+    echo "✅ Icon copied successfully"
+    
+    # Update Info.plist to reference the icon
+    /usr/libexec/PlistBuddy -c "Add :CFBundleIconFile string AsanaBridge.icns" "$APP_PATH/Contents/Info.plist" 2>/dev/null || \
+    /usr/libexec/PlistBuddy -c "Set :CFBundleIconFile AsanaBridge.icns" "$APP_PATH/Contents/Info.plist"
+else
+    echo "⚠️  Icon file not found at $SCRIPT_DIR/AsanaBridge.icns"
+fi
 
 # Set executable permissions
 chmod +x "$APP_PATH/Contents/MacOS/AsanaBridge"

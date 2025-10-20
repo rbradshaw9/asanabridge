@@ -3,6 +3,17 @@ import Foundation
 import Network
 import UserNotifications
 
+// Brand Colors Extension
+extension NSColor {
+    // AsanaBridge Brand Colors
+    static let bridgeBlue = NSColor(red: 0x25/255.0, green: 0x63/255.0, blue: 0xEB/255.0, alpha: 1.0)      // #2563EB
+    static let syncPurple = NSColor(red: 0x8B/255.0, green: 0x5C/255.0, blue: 0xF6/255.0, alpha: 1.0)      // #8B5CF6
+    static let successGreen = NSColor(red: 0x10/255.0, green: 0xB9/255.0, blue: 0x81/255.0, alpha: 1.0)    // #10B981
+    static let accentCoral = NSColor(red: 0xF9/255.0, green: 0x73/255.0, blue: 0x16/255.0, alpha: 1.0)     // #F97316
+    static let statusYellow = NSColor(red: 0xF5/255.0, green: 0x9E/255.0, blue: 0x0B/255.0, alpha: 1.0)    // #F59E0B
+    static let errorRed = NSColor(red: 0xEF/255.0, green: 0x44/255.0, blue: 0x44/255.0, alpha: 1.0)        // #EF4444
+}
+
 class AsanaBridgeApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var statusItem: NSStatusItem?
     var mainWindow: NSWindow?
@@ -1003,7 +1014,7 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // Step number circle with better styling
         let stepCircle = NSView(frame: NSRect(x: 30, y: yPos, width: 36, height: 36))
         stepCircle.wantsLayer = true
-        stepCircle.layer?.backgroundColor = NSColor.systemBlue.cgColor
+        stepCircle.layer?.backgroundColor = NSColor.bridgeBlue.cgColor
         stepCircle.layer?.cornerRadius = 18
         
         let stepLabel = NSTextField(labelWithString: step)
@@ -1080,17 +1091,17 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if !isInstalled {
             iconLabel.stringValue = "❌"
             statusLabel.stringValue = "OmniFocus not detected"
-            statusLabel.textColor = .systemRed
+            statusLabel.textColor = .errorRed
             infoLabel.stringValue = "Install OmniFocus 3 to continue"
         } else if !isRunning {
             iconLabel.stringValue = "⚠️"
             statusLabel.stringValue = "OmniFocus installed"
-            statusLabel.textColor = .systemOrange
+            statusLabel.textColor = .statusYellow
             infoLabel.stringValue = "Launch OmniFocus to activate sync"
         } else {
             iconLabel.stringValue = "✅"
             statusLabel.stringValue = "OmniFocus connected and ready"
-            statusLabel.textColor = .systemGreen
+            statusLabel.textColor = .successGreen
             infoLabel.stringValue = "Tasks will sync automatically"
             omniFocusConnected = true
         }
@@ -1169,11 +1180,11 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
             // Update text color based on status
             switch status {
             case .connected:
-                self.asanaStatusLabel?.textColor = .systemGreen
+                self.asanaStatusLabel?.textColor = .successGreen
             case .connecting:
-                self.asanaStatusLabel?.textColor = .systemBlue
+                self.asanaStatusLabel?.textColor = .bridgeBlue
             case .error:
-                self.asanaStatusLabel?.textColor = .systemRed
+                self.asanaStatusLabel?.textColor = .errorRed
             case .disconnected:
                 self.asanaStatusLabel?.textColor = .secondaryLabelColor
             }
@@ -1733,7 +1744,7 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
         statusLabel.isEditable = false
         statusLabel.isBordered = false
         statusLabel.backgroundColor = .clear
-        statusLabel.textColor = NSColor.systemRed
+        statusLabel.textColor = NSColor.errorRed
         containerView.addSubview(statusLabel)
         
         // Login button
@@ -1799,7 +1810,7 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
         sender.isEnabled = false
         sender.title = "Signing in..."
         statusLabel.stringValue = "Connecting..."
-        statusLabel.textColor = NSColor.systemBlue
+        statusLabel.textColor = NSColor.bridgeBlue
         
         // Call the direct login API
         performDirectLogin(email: email, password: password) { [weak self] success, token, errorMessage in
@@ -1831,7 +1842,7 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 } else {
                     // Show error
                     statusLabel.stringValue = errorMessage ?? "Login failed. Please try again."
-                    statusLabel.textColor = NSColor.systemRed
+                    statusLabel.textColor = NSColor.errorRed
                 }
             }
         }
