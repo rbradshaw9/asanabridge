@@ -51,10 +51,7 @@ const generalLimiter = rateLimit({
   message: { error: 'Too many requests from this IP, please try again later.' },
   standardHeaders: true,
   legacyHeaders: false,
-  validate: { 
-    trustProxy: true, // Trust the X-Forwarded-For header from nginx
-    xForwardedForHeader: false // Disable X-Forwarded-For validation warnings
-  },
+  validate: false, // Disable all validation to prevent X-Forwarded-For warnings
   skip: (req) => {
     // Skip rate limiting for health checks
     return req.path === '/health' || req.path === '/live';
@@ -68,10 +65,7 @@ const authLimiter = rateLimit({
   message: { error: 'Too many authentication attempts, please try again later.' },
   standardHeaders: true,
   legacyHeaders: false,
-  validate: { 
-    trustProxy: true, // Trust the X-Forwarded-For header from nginx
-    xForwardedForHeader: false // Disable X-Forwarded-For validation warnings
-  },
+  validate: false, // Disable all validation to prevent X-Forwarded-For warnings
 });
 
 // Apply general rate limiting to all requests
