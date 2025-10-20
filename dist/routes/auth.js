@@ -329,6 +329,58 @@ router.get('/app-session', async (req, res) => {
         res.status(500).json({ error: 'Failed to check session status' });
     }
 });
+// Get current user info endpoint for desktop app (same as /api/auth/me)
+router.get('/me', async (req, res) => {
+    try {
+        const authHeader = req.headers.authorization;
+        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+            return res.status(401).json({ error: 'No valid authorization header' });
+        }
+        const token = authHeader.substring(7); // Remove 'Bearer ' prefix
+        if (!token || token.length < 10) {
+            return res.status(401).json({ error: 'Invalid token format' });
+        }
+        // Verify JWT token
+        try {
+            const decoded = jsonwebtoken_1.default.verify(token, env.JWT_SECRET);
+            // Get user details
+            const user = await database_1.prisma.user.findUnique({
+                where: { id: decoded.userId },
+                select: {
+                    id: true,
+                    email: true,
+                    name: true,
+                    plan: true,
+                    isAdmin: true,
+                    createdAt: true,
+                    updatedAt: true
+                }
+            });
+            if (!user) {
+                return res.status(401).json({ error: 'User not found' });
+            }
+            res.json({
+                user: {
+                    id: user.id,
+                    email: user.email,
+                    name: user.name,
+                    plan: user.plan,
+                    isAdmin: user.isAdmin,
+                    createdAt: user.createdAt,
+                    updatedAt: user.updatedAt
+                }
+            });
+        }
+        catch (jwtError) {
+            logger_1.logger.warn('Invalid JWT token provided to /me endpoint', { error: jwtError });
+            res.status(401).json({ error: 'Invalid or expired token' });
+        }
+    }
+    catch (error) {
+        logger_1.logger.error('User info fetch error', error);
+        res.status(500).json({ error: 'Failed to fetch user info' });
+    }
+});
 // Token validation endpoint for desktop app
 router.get('/validate', async (req, res) => {
     try {
@@ -600,7 +652,7 @@ router.get('/app/version-check', async (req, res) => {
     try {
         const currentVersion = req.query.current;
         // Current app version info - easily updatable
-        const latestVersion = "2.2.0";
+        const latestVersion = "2.2.1";
         const minimumVersion = "2.0.0";
         const downloadUrl = "https://asanabridge.com/api/auth/app/download/latest";
         const fileSize = 160000; // ~160KB
@@ -634,36 +686,30 @@ router.get('/app/version-check', async (req, res) => {
         res.status(500).json({ error: 'Version check failed' });
     }
 });
-// App download endpoint
+// App download endpoint - Always serves latest version
+// App download endpoint - redirect to unified download route
 router.get('/app/download/latest', async (req, res) => {
+    // For unauthenticated downloads (public link), serve directly
     try {
         const userAgent = req.get('User-Agent') || 'unknown';
         const clientIP = req.ip || req.connection.remoteAddress || 'unknown';
-        // Log download analytics
-        logger_1.logger.info('App download requested', {
+        logger_1.logger.info('Public app download requested', {
             ip: clientIP,
             userAgent,
-            version: '2.2.0',
             timestamp: new Date().toISOString()
         });
-        // Serve the actual DMG file from public/downloads
         const path = require('path');
-        const downloadPath = path.join(__dirname, '../../public/downloads/AsanaBridge-2.2.0.dmg');
-        // Check if file exists
         const fs = require('fs');
+        const downloadPath = path.join(__dirname, '../../public/downloads/AsanaBridge-Latest.dmg');
         if (!fs.existsSync(downloadPath)) {
             logger_1.logger.error('DMG file not found', { downloadPath });
-            return res.status(404).json({ error: 'Download file not found' });
+            return res.status(404).json({ error: 'Download file not found. Please contact support.' });
         }
-        // Get file stats for Content-Length
         const stats = fs.statSync(downloadPath);
-        const fileSize = stats.size;
-        // Set appropriate headers for file download
         res.setHeader('Content-Type', 'application/x-apple-diskimage');
-        res.setHeader('Content-Disposition', 'attachment; filename="AsanaBridge-2.2.0.dmg"');
-        res.setHeader('Content-Length', fileSize.toString());
-        res.setHeader('Cache-Control', 'public, max-age=3600'); // Cache for 1 hour
-        // Stream the file
+        res.setHeader('Content-Disposition', 'attachment; filename="AsanaBridge.dmg"');
+        res.setHeader('Content-Length', stats.size.toString());
+        res.setHeader('Cache-Control', 'public, max-age=3600');
         res.sendFile(downloadPath);
     }
     catch (error) {
@@ -677,6 +723,31 @@ router.get('/app/changelog/:version?', async (req, res) => {
         const version = req.params.version || 'latest';
         // Version changelog database (in production, store in database)
         const changelogs = {
+            '2.2.1': {
+                version: '2.2.1',
+                releaseDate: '2025-10-08',
+                critical: true,
+                features: [
+                    '🐛 CRITICAL FIX: Menu bar icon no longer disappears after right-click',
+                    '✨ Improved status page with clearer labels and emoji indicators',
+                    '🎨 Better About dialog with dynamic version info and website link',
+                    '🔄 Enhanced status display - shows "Account", "Asana Connection", "OmniFocus", and "Sync Agent"',
+                    '📝 Helpful info messages added to status page',
+                    '⚡ Faster menu bar icon recovery with automatic retry logic'
+                ],
+                bugFixes: [
+                    'Fixed menu bar icon disappearing bug (statusItem.menu = nil issue)',
+                    'Fixed status page showing escaped strings like "\\(icon) \\(status)"',
+                    'Added version logging for better crash diagnostics',
+                    'Improved nil check handling for statusItem creation'
+                ],
+                technical: [
+                    'Delayed menu cleanup to prevent statusItem removal',
+                    'Fixed string interpolation in status labels',
+                    'Added statusItem retry logic on creation failure',
+                    'Enhanced error handling and recovery'
+                ]
+            },
             '2.2.0': {
                 version: '2.2.0',
                 releaseDate: '2025-10-07',
@@ -732,7 +803,7 @@ router.get('/app/changelog/:version?', async (req, res) => {
                 ]
             }
         };
-        const changelog = version === 'latest' ? changelogs['2.2.0'] : changelogs[version];
+        const changelog = version === 'latest' ? changelogs['2.2.1'] : changelogs[version];
         if (!changelog) {
             return res.status(404).json({ error: 'Version not found' });
         }

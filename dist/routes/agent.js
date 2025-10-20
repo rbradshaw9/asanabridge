@@ -1,4 +1,37 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -9,21 +42,56 @@ const logger_1 = require("../config/logger");
 const database_1 = require("../config/database");
 const crypto_1 = __importDefault(require("crypto"));
 const router = (0, express_1.Router)();
-// Agent authentication middleware
+// Agent authentication middleware - supports both agent keys and JWT tokens
 async function authenticateAgent(req, res, next) {
     const authHeader = req.headers['authorization'];
-    const agentKey = authHeader && authHeader.split(' ')[1]; // Bearer AGENT_KEY
-    if (!agentKey) {
-        return res.status(401).json({ error: 'Agent key required' });
+    const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+    if (!token) {
+        return res.status(401).json({ error: 'Authentication token required' });
     }
     try {
-        // Find OmniFocus setup with this agent key
+        // First try JWT token authentication (for macOS app)
+        if (token.includes('.')) {
+            try {
+                const { verifyToken } = await Promise.resolve().then(() => __importStar(require('../services/auth')));
+                const payload = verifyToken(token);
+                if (payload && payload.userId) {
+                    // Get user and their OmniFocus setup
+                    const user = await database_1.prisma.user.findUnique({
+                        where: { id: payload.userId },
+                        include: { omnifocusSetup: true }
+                    });
+                    if (!user) {
+                        return res.status(403).json({ error: 'User not found' });
+                    }
+                    // Create OmniFocus setup if it doesn't exist
+                    let setup = user.omnifocusSetup;
+                    if (!setup) {
+                        setup = await database_1.prisma.omniFocusSetup.create({
+                            data: {
+                                userId: user.id,
+                                agentKey: crypto_1.default.randomBytes(32).toString('hex'),
+                                isActive: false
+                            }
+                        });
+                    }
+                    // Add user context to request
+                    req.agentUser = user;
+                    req.agentSetup = setup;
+                    return next();
+                }
+            }
+            catch (jwtError) {
+                // JWT verification failed, continue to agent key auth
+            }
+        }
+        // Fallback to agent key authentication
         const setup = await database_1.prisma.omniFocusSetup.findUnique({
-            where: { agentKey },
+            where: { agentKey: token },
             include: { user: true }
         });
         if (!setup || !setup.isActive) {
-            return res.status(403).json({ error: 'Invalid or inactive agent key' });
+            return res.status(403).json({ error: 'Invalid or inactive authentication token' });
         }
         // Add user context to request
         req.agentUser = setup.user;
@@ -31,7 +99,7 @@ async function authenticateAgent(req, res, next) {
         next();
     }
     catch (error) {
-        logger_1.logger.error('Agent authentication error', error);
+        logger_1.agentLogger.error('Agent authentication error', error);
         res.status(500).json({ error: 'Authentication failed' });
     }
 }
@@ -49,7 +117,7 @@ router.post('/register', authenticateAgent, async (req, res) => {
                 updatedAt: new Date()
             }
         });
-        logger_1.logger.info('Agent registered', {
+        logger_1.agentLogger.info('Agent registered', {
             userId: setup.userId,
             version,
             capabilities,
@@ -62,7 +130,7 @@ router.post('/register', authenticateAgent, async (req, res) => {
         });
     }
     catch (error) {
-        logger_1.logger.error('Agent registration failed', error);
+        logger_1.agentLogger.error('Agent registration failed', error);
         res.status(500).json({ error: 'Registration failed' });
     }
 });
@@ -119,7 +187,7 @@ router.get('/config', authenticateAgent, async (req, res) => {
         });
     }
     catch (error) {
-        logger_1.logger.error('Failed to get agent config', error);
+        logger_1.agentLogger.error('Failed to get agent config', error);
         res.status(500).json({ error: 'Failed to get configuration' });
     }
 });
@@ -137,7 +205,7 @@ router.get('/mappings', authenticateAgent, async (req, res) => {
         res.json({ mappings });
     }
     catch (error) {
-        logger_1.logger.error('Failed to fetch sync mappings', error);
+        logger_1.agentLogger.error('Failed to fetch sync mappings', error);
         res.status(500).json({ error: 'Failed to fetch mappings' });
     }
 });
@@ -174,8 +242,37 @@ router.post('/sync-status', authenticateAgent, async (req, res) => {
         res.json({ message: 'Status reported' });
     }
     catch (error) {
-        logger_1.logger.error('Failed to report sync status', error);
+        logger_1.agentLogger.error('Failed to report sync status', error);
         res.status(500).json({ error: 'Failed to report status' });
+    }
+});
+// Agent heartbeat endpoint
+router.post('/heartbeat', authenticateAgent, async (req, res) => {
+    try {
+        const { status, omnifocus_connected, last_sync } = req.body;
+        const setup = req.agentSetup;
+        // Update agent status in database
+        await database_1.prisma.omniFocusSetup.update({
+            where: { id: setup.id },
+            data: {
+                isActive: status === 'active',
+                updatedAt: new Date()
+            }
+        });
+        logger_1.agentLogger.info('Agent heartbeat received', {
+            userId: setup.userId,
+            status,
+            omnifocus_connected,
+            last_sync
+        });
+        res.json({
+            message: 'Heartbeat received',
+            serverTime: new Date().toISOString()
+        });
+    }
+    catch (error) {
+        logger_1.agentLogger.error('Failed to process heartbeat', error);
+        res.status(500).json({ error: 'Failed to process heartbeat' });
     }
 });
 // Get pending sync commands
@@ -185,7 +282,7 @@ router.get('/commands', authenticateAgent, async (req, res) => {
         res.json({ commands: [] });
     }
     catch (error) {
-        logger_1.logger.error('Failed to fetch commands', error);
+        logger_1.agentLogger.error('Failed to fetch commands', error);
         res.status(500).json({ error: 'Failed to fetch commands' });
     }
 });
@@ -194,7 +291,7 @@ router.post('/commands/ack', authenticateAgent, async (req, res) => {
     try {
         const { commandId, success, error: errorMsg } = req.body;
         // Log command acknowledgment
-        logger_1.logger.info('Command acknowledged', {
+        logger_1.agentLogger.info('Command acknowledged', {
             commandId,
             success,
             error: errorMsg,
@@ -203,7 +300,7 @@ router.post('/commands/ack', authenticateAgent, async (req, res) => {
         res.json({ message: 'Command acknowledged' });
     }
     catch (error) {
-        logger_1.logger.error('Failed to acknowledge command', error);
+        logger_1.agentLogger.error('Failed to acknowledge command', error);
         res.status(500).json({ error: 'Failed to acknowledge command' });
     }
 });
@@ -220,7 +317,7 @@ router.post('/task-data', authenticateAgent, async (req, res) => {
             return res.status(404).json({ error: 'Mapping not found' });
         }
         // Store task data for sync processing (implement sync logic here)
-        logger_1.logger.info('Received OmniFocus task data', {
+        logger_1.agentLogger.info('Received OmniFocus task data', {
             mappingId,
             taskCount: tasks.length,
             userId
@@ -232,7 +329,7 @@ router.post('/task-data', authenticateAgent, async (req, res) => {
         });
     }
     catch (error) {
-        logger_1.logger.error('Failed to process task data', error);
+        logger_1.agentLogger.error('Failed to process task data', error);
         res.status(500).json({ error: 'Failed to process task data' });
     }
 });
@@ -299,7 +396,7 @@ router.get('/account-info', authenticateAgent, async (req, res) => {
         });
     }
     catch (error) {
-        logger_1.logger.error('Failed to get account info', error);
+        logger_1.agentLogger.error('Failed to get account info', error);
         res.status(500).json({ error: 'Failed to get account information' });
     }
 });
@@ -322,14 +419,14 @@ router.post('/generate-key', auth_1.authenticateToken, async (req, res) => {
                 isActive: false
             }
         });
-        logger_1.logger.info('Agent key generated', { userId });
+        logger_1.agentLogger.info('Agent key generated', { userId });
         res.json({
             agentKey,
             message: 'Download and configure the OmniFocus agent with this key'
         });
     }
     catch (error) {
-        logger_1.logger.error('Failed to generate agent key', error);
+        logger_1.agentLogger.error('Failed to generate agent key', error);
         res.status(500).json({ error: 'Failed to generate key' });
     }
 });
@@ -342,19 +439,37 @@ router.get('/status', auth_1.authenticateToken, async (req, res) => {
         });
         if (!setup) {
             return res.json({
+                isOnline: false,
                 connected: false,
-                message: 'No agent configured'
+                message: 'No agent configured',
+                hasKey: false
             });
         }
+        // Consider agent online if:
+        // 1. isActive is true
+        // 2. Last heartbeat was within 2 minutes (agents send heartbeat every minute)
+        const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000);
+        const isOnline = setup.isActive && setup.updatedAt > twoMinutesAgo;
+        // Calculate time since last heartbeat for diagnostics
+        const timeSinceHeartbeat = Date.now() - setup.updatedAt.getTime();
+        const minutesSinceHeartbeat = Math.floor(timeSinceHeartbeat / 1000 / 60);
         res.json({
-            connected: setup.isActive,
+            isOnline,
+            connected: isOnline, // For backwards compatibility
             version: setup.version,
             lastSeen: setup.updatedAt,
-            hasKey: !!setup.agentKey
+            lastHeartbeat: setup.updatedAt,
+            hasKey: !!setup.agentKey,
+            diagnostic: {
+                isActive: setup.isActive,
+                minutesSinceLastHeartbeat: minutesSinceHeartbeat,
+                heartbeatWithinThreshold: setup.updatedAt > twoMinutesAgo,
+                thresholdMinutes: 2
+            }
         });
     }
     catch (error) {
-        logger_1.logger.error('Failed to get agent status', error);
+        logger_1.agentLogger.error('Failed to get agent status', error);
         res.status(500).json({ error: 'Failed to get status' });
     }
 });

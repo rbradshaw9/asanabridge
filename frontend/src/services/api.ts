@@ -156,6 +156,9 @@ export const authApi = {
 
   addSupportResponse: (ticketId: string, message: string) =>
     api.post(`/support/tickets/${ticketId}/response`, { message }),
+
+  disconnectAgent: () =>
+    api.post('/agent/disconnect'),
 };
 
 export default api;

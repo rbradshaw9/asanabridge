@@ -456,9 +456,9 @@ router.get('/status', authenticateToken, async (req: AuthenticatedRequest, res: 
 
     // Consider agent online if:
     // 1. isActive is true
-    // 2. Last heartbeat was within 10 minutes
-    const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
-    const isOnline = setup.isActive && setup.updatedAt > tenMinutesAgo;
+    // 2. Last heartbeat was within 2 minutes (agents send heartbeat every minute)
+    const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000);
+    const isOnline = setup.isActive && setup.updatedAt > twoMinutesAgo;
 
     // Calculate time since last heartbeat for diagnostics
     const timeSinceHeartbeat = Date.now() - setup.updatedAt.getTime();
@@ -474,7 +474,8 @@ router.get('/status', authenticateToken, async (req: AuthenticatedRequest, res: 
       diagnostic: {
         isActive: setup.isActive,
         minutesSinceLastHeartbeat: minutesSinceHeartbeat,
-        heartbeatWithinThreshold: setup.updatedAt > tenMinutesAgo
+        heartbeatWithinThreshold: setup.updatedAt > twoMinutesAgo,
+        thresholdMinutes: 2
       }
     });
   } catch (error) {

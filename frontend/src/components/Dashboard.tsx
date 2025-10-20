@@ -174,6 +174,13 @@ const Dashboard: React.FC = () => {
     
     // Check if user needs onboarding
     checkOnboardingStatus();
+    
+    // Poll agent status every 30 seconds to detect disconnections quickly
+    const agentStatusInterval = setInterval(() => {
+      checkAgentStatus();
+    }, 30000); // 30 seconds
+    
+    return () => clearInterval(agentStatusInterval);
   }, []);
 
   const checkOnboardingStatus = () => {
@@ -249,6 +256,25 @@ const Dashboard: React.FC = () => {
     setAsanaUser(null);
     setAsanaProjects([]);
     setSuccessMessage('Asana disconnected. You can reconnect anytime.');
+  };
+
+  const handleDisconnectAgent = async () => {
+    if (!confirm('Disconnect the desktop app? You can reconnect by opening the app again.')) {
+      return;
+    }
+    setLoading(true);
+    setError('');
+    try {
+      await authApi.disconnectAgent();
+      setAgentStatus({ connected: false, hasKey: false });
+      setSuccessMessage('Desktop app disconnected successfully.');
+      // Refresh status after a moment
+      setTimeout(() => checkAgentStatus(), 1000);
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to disconnect desktop app');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const loadAsanaProjects = async () => {
@@ -729,6 +755,12 @@ const Dashboard: React.FC = () => {
                     <CheckCircle size={16} />
                     <span>Real-time synchronization active</span>
                   </div>
+                  <button
+                    onClick={handleDisconnectAgent}
+                    className="text-red-400 hover:text-red-300 text-sm underline"
+                  >
+                    Disconnect Desktop App
+                  </button>
                 </div>
               ) : (
                 <div className="space-y-4">

@@ -811,6 +811,13 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
         refreshItem.target = self
         contextMenu.addItem(refreshItem)
         
+        // Disconnect option (only show if connected)
+        if userToken != nil {
+            let disconnectItem = NSMenuItem(title: "Disconnect from Bridge", action: #selector(disconnectFromBridge), keyEquivalent: "")
+            disconnectItem.target = self
+            contextMenu.addItem(disconnectItem)
+        }
+        
         contextMenu.addItem(NSMenuItem.separator())
         
         // Version and update info
@@ -2341,6 +2348,65 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
             updateMenuBarMenu()
             showStatusNotification()
         }
+    }
+    
+    @objc func disconnectFromBridge() {
+        let alert = NSAlert()
+        alert.messageText = "Disconnect from AsanaBridge?"
+        alert.informativeText = "This will stop syncing tasks. You can reconnect anytime by clicking 'Connect to AsanaBridge'."
+        alert.addButton(withTitle: "Disconnect")
+        alert.addButton(withTitle: "Cancel")
+        
+        let response = alert.runModal()
+        if response == .alertFirstButtonReturn {
+            performDisconnect()
+        }
+    }
+    
+    func performDisconnect() {
+        guard let token = userToken else { return }
+        
+        // Call disconnect API
+        guard let url = URL(string: "\(authBaseURL)/agent/disconnect") else { return }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
+            DispatchQueue.main.async {
+                if let error = error {
+                    self?.logError("Disconnect failed", error: error)
+                    self?.showErrorAlert(
+                        title: "Disconnect Failed",
+                        message: "Failed to disconnect from server. Clearing local connection anyway."
+                    )
+                }
+                
+                // Clear local state regardless of API response
+                self?.clearTokenAndReset()
+                self?.updateMenuBarMenu()
+                
+                // Show success notification
+                let center = UNUserNotificationCenter.current()
+                let content = UNMutableNotificationContent()
+                content.title = "Disconnected"
+                content.body = "You've been disconnected from AsanaBridge. Open the app to reconnect."
+                
+                let request = UNNotificationRequest(
+                    identifier: "asanabridge-disconnect-\(Date().timeIntervalSince1970)",
+                    content: content,
+                    trigger: nil
+                )
+                
+                center.add(request) { error in
+                    if let error = error {
+                        print("⚠️ Disconnect notification error: \(error)")
+                    }
+                }
+            }
+        }.resume()
     }
     
     func showStatusNotification() {

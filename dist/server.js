@@ -20,10 +20,13 @@ const download_1 = __importDefault(require("./routes/download"));
 const deploy_info_1 = __importDefault(require("./routes/deploy-info"));
 const admin_1 = __importDefault(require("./routes/admin"));
 const support_1 = __importDefault(require("./routes/support"));
+const diagnostics_1 = __importDefault(require("./routes/diagnostics"));
 // Load environment variables first
 dotenv_1.default.config();
 const env = (0, env_1.loadEnv)();
 const app = (0, express_1.default)();
+// Trust proxy - must come first when behind nginx/load balancer
+app.set('trust proxy', 1);
 // Security middleware - must come before other middleware
 app.use((0, helmet_1.default)({
     contentSecurityPolicy: {
@@ -48,14 +51,20 @@ const generalLimiter = (0, express_rate_limit_1.default)({
     message: { error: 'Too many requests from this IP, please try again later.' },
     standardHeaders: true,
     legacyHeaders: false,
+    validate: false, // Disable all validation to prevent X-Forwarded-For warnings
+    skip: (req) => {
+        // Skip rate limiting for health checks
+        return req.path === '/health' || req.path === '/live';
+    }
 });
 // Strict rate limiting for authentication endpoints
 const authLimiter = (0, express_rate_limit_1.default)({
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 20, // Limit each IP to 20 auth requests per windowMs
+    max: 50, // Increased from 20 to 50 for better UX
     message: { error: 'Too many authentication attempts, please try again later.' },
     standardHeaders: true,
     legacyHeaders: false,
+    validate: false, // Disable all validation to prevent X-Forwarded-For warnings
 });
 // Apply general rate limiting to all requests
 app.use(generalLimiter);
@@ -85,8 +94,29 @@ app.use((0, cors_1.default)({
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization']
 }));
-app.use(express_1.default.json({ limit: '10mb' }));
-app.use(express_1.default.urlencoded({ extended: true }));
+// Request parsing middleware with increased limits and timeout
+app.use(express_1.default.json({
+    limit: '10mb',
+    strict: true,
+    type: 'application/json'
+}));
+app.use(express_1.default.urlencoded({
+    extended: true,
+    limit: '10mb',
+    parameterLimit: 1000
+}));
+// Set request timeout (30 seconds)
+app.use((req, res, next) => {
+    res.setTimeout(30000, () => {
+        logger_1.logger.warn('Request timeout', {
+            url: req.url,
+            method: req.method,
+            ip: req.ip
+        });
+        res.status(408).json({ error: 'Request timeout' });
+    });
+    next();
+});
 // Health check endpoints
 const healthCheck = async (_req, res) => {
     try {
@@ -96,7 +126,7 @@ const healthCheck = async (_req, res) => {
             secrets: 'unknown',
             commit: 'unknown',
             timestamp: new Date().toISOString(),
-            version: '2.1.0'
+            version: '2.2.1'
         };
         // Check database connection
         try {
@@ -135,7 +165,7 @@ const healthCheck = async (_req, res) => {
         res.json({
             status: 'ok',
             checks,
-            deploymentTest: 'VERSION_CHECK_SYSTEM_v2.1.0'
+            deploymentTest: 'VERSION_CHECK_SYSTEM_v2.2.1'
         });
     }
     catch (error) {
@@ -178,11 +208,12 @@ app.use('/api/download', download_1.default);
 app.use('/api/deploy', deploy_info_1.default);
 app.use('/api/admin', admin_1.default);
 app.use('/api/support', support_1.default);
+app.use('/api/diagnostics', diagnostics_1.default);
 // Basic API routes (will expand these)
 app.get('/api/status', (_req, res) => {
     res.json({
         service: 'AsanaBridge API',
-        version: '0.1.0',
+        version: '2.2.1',
         environment: env.NODE_ENV
     });
 });
@@ -196,10 +227,23 @@ app.get('*', (_req, res) => {
     res.sendFile(path_1.default.join(__dirname, '../frontend/dist/index.html'));
 });
 // Global error handler
-app.use((error, _req, res, _next) => {
-    logger_1.logger.error('Unhandled error', error);
-    res.status(500).json({
-        error: env.NODE_ENV === 'production' ? 'Internal server error' : error.message
+app.use((error, req, res, _next) => {
+    // Log error with request context
+    logger_1.logger.error('Unhandled error', {
+        error: error.message,
+        stack: error.stack,
+        url: req.url,
+        method: req.method,
+        ip: req.ip,
+        userAgent: req.get('User-Agent')
+    });
+    // Send appropriate error response
+    if (res.headersSent) {
+        return; // Response already sent
+    }
+    res.status(error.status || 500).json({
+        error: env.NODE_ENV === 'production' ? 'Internal server error' : error.message,
+        requestId: req.get('X-Request-ID') || 'unknown'
     });
 });
 const port = env.PORT;
