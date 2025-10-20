@@ -6,24 +6,63 @@ import crypto from 'crypto';
 
 const router = Router();
 
-// Agent authentication middleware
+// Agent authentication middleware - supports both agent keys and JWT tokens
 async function authenticateAgent(req: Request, res: Response, next: any) {
   const authHeader = req.headers['authorization'];
-  const agentKey = authHeader && authHeader.split(' ')[1]; // Bearer AGENT_KEY
+  const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
 
-  if (!agentKey) {
-    return res.status(401).json({ error: 'Agent key required' });
+  if (!token) {
+    return res.status(401).json({ error: 'Authentication token required' });
   }
 
   try {
-    // Find OmniFocus setup with this agent key
+    // First try JWT token authentication (for macOS app)
+    if (token.includes('.')) {
+      try {
+        const { verifyToken } = await import('../services/auth');
+        const payload = verifyToken(token);
+        
+        if (payload && payload.userId) {
+          // Get user and their OmniFocus setup
+          const user = await prisma.user.findUnique({
+            where: { id: payload.userId },
+            include: { omnifocusSetup: true }
+          });
+
+          if (!user) {
+            return res.status(403).json({ error: 'User not found' });
+          }
+
+          // Create OmniFocus setup if it doesn't exist
+          let setup = user.omnifocusSetup;
+          if (!setup) {
+            setup = await prisma.omniFocusSetup.create({
+              data: {
+                userId: user.id,
+                agentKey: crypto.randomBytes(32).toString('hex'),
+                isActive: false
+              }
+            });
+          }
+
+          // Add user context to request
+          (req as any).agentUser = user;
+          (req as any).agentSetup = setup;
+          return next();
+        }
+      } catch (jwtError) {
+        // JWT verification failed, continue to agent key auth
+      }
+    }
+
+    // Fallback to agent key authentication
     const setup = await prisma.omniFocusSetup.findUnique({
-      where: { agentKey },
+      where: { agentKey: token },
       include: { user: true }
     });
 
     if (!setup || !setup.isActive) {
-      return res.status(403).json({ error: 'Invalid or inactive agent key' });
+      return res.status(403).json({ error: 'Invalid or inactive authentication token' });
     }
 
     // Add user context to request
@@ -191,6 +230,38 @@ router.post('/sync-status', authenticateAgent, async (req: Request, res: Respons
   } catch (error) {
     logger.error('Failed to report sync status', error);
     res.status(500).json({ error: 'Failed to report status' });
+  }
+});
+
+// Agent heartbeat endpoint
+router.post('/heartbeat', authenticateAgent, async (req: Request, res: Response) => {
+  try {
+    const { status, omnifocus_connected, last_sync } = req.body;
+    const setup = (req as any).agentSetup;
+
+    // Update agent status in database
+    await prisma.omniFocusSetup.update({
+      where: { id: setup.id },
+      data: {
+        isActive: status === 'active',
+        updatedAt: new Date()
+      }
+    });
+
+    logger.info('Agent heartbeat received', {
+      userId: setup.userId,
+      status,
+      omnifocus_connected,
+      last_sync
+    });
+
+    res.json({ 
+      message: 'Heartbeat received',
+      serverTime: new Date().toISOString()
+    });
+  } catch (error) {
+    logger.error('Failed to process heartbeat', error);
+    res.status(500).json({ error: 'Failed to process heartbeat' });
   }
 });
 

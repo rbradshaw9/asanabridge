@@ -299,6 +299,10 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
                         self?.asanaConnected = true
                         self?.updateStatusBarTitle("✅ AsanaBridge")
                         
+                        // Register with server and start agent services
+                        self?.registerAgentWithServer()
+                        self?.startPeriodicSync()
+                        
                         // Show a brief welcome notification for returning users
                         self?.showWelcomeNotification()
                     } else {
@@ -1570,6 +1574,10 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
         isAwaitingAuthentication = false
         authSessionId = nil
         
+        // Register with server and start agent services
+        registerAgentWithServer()
+        startPeriodicSync()
+        
         updateStatusBarTitle("✅ AsanaBridge")
         
         DispatchQueue.main.async {
@@ -2648,6 +2656,138 @@ class HTTPServer {
         connection.send(content: responseData, completion: .contentProcessed { _ in
             connection.cancel()
         })
+    }
+    
+    // MARK: - Agent Registration and Communication
+    
+    func registerAgentWithServer() {
+        guard let token = userToken, !token.isEmpty else {
+            logMessage("Cannot register agent - no authentication token", level: .error)
+            return
+        }
+        
+        logMessage("Registering agent with AsanaBridge server...")
+        
+        guard let url = URL(string: "\(baseURL)/api/agent/register") else {
+            logMessage("Invalid agent registration URL", level: .error)
+            return
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        let registrationData: [String: Any] = [
+            "version": Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "2.2.1",
+            "platform": "macOS",
+            "capabilities": ["omnifocus_sync", "task_creation", "task_completion"],
+            "nodeVersion": "Swift/macOS"
+        ]
+        
+        do {
+            request.httpBody = try JSONSerialization.data(withJSONObject: registrationData)
+        } catch {
+            logMessage("Failed to serialize registration data: \(error)", level: .error)
+            return
+        }
+        
+        URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
+            if let error = error {
+                self?.logMessage("Agent registration failed: \(error.localizedDescription)", level: .error)
+                return
+            }
+            
+            if let httpResponse = response as? HTTPURLResponse {
+                if httpResponse.statusCode == 200 {
+                    self?.logMessage("✅ Agent registered successfully with server")
+                    DispatchQueue.main.async {
+                        self?.updateStatusBarTitle("✅ Connected")
+                    }
+                } else {
+                    self?.logMessage("Agent registration failed with status: \(httpResponse.statusCode)", level: .error)
+                }
+            }
+        }.resume()
+    }
+    
+    func startPeriodicSync() {
+        logMessage("Starting periodic sync operations")
+        
+        // Send heartbeat every 5 minutes to show agent is alive
+        Timer.scheduledTimer(withTimeInterval: 300, repeats: true) { [weak self] _ in
+            self?.sendHeartbeat()
+        }
+        
+        // Start OmniFocus sync every 15 minutes
+        Timer.scheduledTimer(withTimeInterval: 900, repeats: true) { [weak self] _ in
+            self?.performOmniFocusSync()
+        }
+        
+        // Initial sync after 10 seconds
+        DispatchQueue.main.asyncAfter(deadline: .now() + 10) { [weak self] in
+            self?.performOmniFocusSync()
+        }
+    }
+    
+    func sendHeartbeat() {
+        guard let token = userToken, !token.isEmpty else { return }
+        
+        guard let url = URL(string: "\(baseURL)/api/agent/heartbeat") else { return }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        let heartbeatData: [String: Any] = [
+            "status": "active",
+            "omnifocus_connected": omniFocusConnected,
+            "last_sync": ISO8601DateFormatter().string(from: Date())
+        ]
+        
+        do {
+            request.httpBody = try JSONSerialization.data(withJSONObject: heartbeatData)
+        } catch {
+            return
+        }
+        
+        URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
+            if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 {
+                self?.logMessage("Heartbeat sent successfully")
+            }
+        }.resume()
+    }
+    
+    func performOmniFocusSync() {
+        guard asanaConnected, let token = userToken, !token.isEmpty else {
+            logMessage("Skipping sync - not connected to AsanaBridge")
+            return
+        }
+        
+        logMessage("Starting OmniFocus sync...")
+        
+        // Check OmniFocus connection first
+        checkOmniFocusConnection()
+        
+        if !omniFocusConnected {
+            logMessage("OmniFocus not available - skipping sync")
+            return
+        }
+        
+        // Perform the actual sync operations using existing bidirectional sync
+        Task {
+            do {
+                let success = try await performBidirectionalSync(token: token)
+                if success {
+                    logMessage("✅ OmniFocus sync completed successfully")
+                } else {
+                    logMessage("⚠️ OmniFocus sync completed with warnings")
+                }
+            } catch {
+                logMessage("❌ OmniFocus sync failed: \(error.localizedDescription)", level: .error)
+            }
+        }
     }
 }
 
