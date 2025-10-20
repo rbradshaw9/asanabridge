@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { authenticateToken, AuthenticatedRequest } from '../services/auth';
-import { logger } from '../config/logger';
+import { agentLogger as logger } from '../config/logger';
 import { prisma } from '../config/database';
 import crypto from 'crypto';
 

@@ -791,7 +791,7 @@ router.get('/app/version-check', async (req: Request, res: Response) => {
   }
 });
 
-// App download endpoint
+// App download endpoint - Always serves latest version
 router.get('/app/download/latest', async (req: Request, res: Response) => {
   try {
     const userAgent = req.get('User-Agent') || 'unknown';
@@ -806,12 +806,20 @@ router.get('/app/download/latest', async (req: Request, res: Response) => {
     });
     
     // Serve the actual DMG file from public/downloads
+    // Always serve AsanaBridge-Latest.dmg which is updated on each deployment
     const path = require('path');
-    const downloadPath = path.join(__dirname, '../../public/downloads/AsanaBridge-2.2.1.dmg');
+    const downloadPath = path.join(__dirname, '../../public/downloads/AsanaBridge-Latest.dmg');
     
     // Check if file exists
     const fs = require('fs');
     if (!fs.existsSync(downloadPath)) {
+      // Fallback to versioned file if latest doesn't exist
+      const fallbackPath = path.join(__dirname, '../../public/downloads/AsanaBridge-v2.2.1.dmg');
+      if (fs.existsSync(fallbackPath)) {
+        logger.warn('Latest DMG not found, serving versioned file', { fallbackPath });
+        return res.download(fallbackPath, 'AsanaBridge-2.2.1.dmg');
+      }
+      
       logger.error('DMG file not found', { downloadPath });
       return res.status(404).json({ error: 'Download file not found' });
     }
