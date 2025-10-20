@@ -708,12 +708,12 @@ const Dashboard: React.FC = () => {
                 </div>
                 
                 {agentStatus.connected ? (
-                  <div className="flex items-center gap-2 px-3 py-1.5 bg-green-500/20 border border-green-500/30 rounded-full">
+                  <div className="flex items-center gap-2 px-3 py-1.5 bg-green-500/20 border border-green-500/30 rounded-full" title={agentStatus.lastSeen ? `Last heartbeat: ${new Date(agentStatus.lastSeen).toLocaleString()}` : ''}>
                     <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
                     <span className="text-green-300 text-sm font-medium">Connected</span>
                   </div>
                 ) : (
-                  <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-500/20 border border-gray-500/30 rounded-full">
+                  <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-500/20 border border-gray-500/30 rounded-full" title={agentStatus.lastSeen ? `Last seen: ${new Date(agentStatus.lastSeen).toLocaleString()}` : 'Never connected'}>
                     <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
                     <span className="text-gray-400 text-sm font-medium">Not Connected</span>
                   </div>

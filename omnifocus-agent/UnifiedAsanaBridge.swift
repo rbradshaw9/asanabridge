@@ -757,11 +757,59 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
         
         contextMenu.addItem(NSMenuItem.separator())
         
-        // Connection status
-        let statusTitle = (userToken != nil) ? "Connected to AsanaBridge" : "Not Connected"
-        let statusMenuItem = NSMenuItem(title: statusTitle, action: nil, keyEquivalent: "")
-        statusMenuItem.isEnabled = false
-        contextMenu.addItem(statusMenuItem)
+        // === STATUS SECTION ===
+        let statusHeader = NSMenuItem(title: "Status", action: nil, keyEquivalent: "")
+        statusHeader.isEnabled = false
+        let headerFont = NSFont.boldSystemFont(ofSize: 11)
+        statusHeader.attributedTitle = NSAttributedString(
+            string: "STATUS",
+            attributes: [
+                .font: headerFont,
+                .foregroundColor: NSColor.secondaryLabelColor
+            ]
+        )
+        contextMenu.addItem(statusHeader)
+        
+        // Bridge Connection Status
+        let bridgeStatusIcon = (userToken != nil) ? "●" : "○"
+        let bridgeStatusColor = (userToken != nil) ? NSColor.successGreen : NSColor.errorRed
+        let bridgeStatusText = (userToken != nil) ? "Bridge: Connected" : "Bridge: Not Connected"
+        let bridgeStatusItem = NSMenuItem(title: "   \(bridgeStatusIcon) \(bridgeStatusText)", action: nil, keyEquivalent: "")
+        bridgeStatusItem.isEnabled = false
+        let bridgeAttr = NSMutableAttributedString(string: "   \(bridgeStatusIcon) \(bridgeStatusText)")
+        bridgeAttr.addAttribute(.foregroundColor, value: bridgeStatusColor, range: NSRange(location: 3, length: 1))
+        bridgeStatusItem.attributedTitle = bridgeAttr
+        contextMenu.addItem(bridgeStatusItem)
+        
+        // OmniFocus Connection Status
+        let ofStatusIcon = omniFocusConnected ? "●" : "○"
+        let ofStatusColor = omniFocusConnected ? NSColor.successGreen : NSColor.errorRed
+        let ofStatusText = omniFocusConnected ? "OmniFocus: Connected" : "OmniFocus: Not Found"
+        let ofStatusItem = NSMenuItem(title: "   \(ofStatusIcon) \(ofStatusText)", action: nil, keyEquivalent: "")
+        ofStatusItem.isEnabled = false
+        let ofAttr = NSMutableAttributedString(string: "   \(ofStatusIcon) \(ofStatusText)")
+        ofAttr.addAttribute(.foregroundColor, value: ofStatusColor, range: NSRange(location: 3, length: 1))
+        ofStatusItem.attributedTitle = ofAttr
+        contextMenu.addItem(ofStatusItem)
+        
+        // Sync Status (both must be connected)
+        let syncActive = (userToken != nil) && omniFocusConnected
+        let syncStatusIcon = syncActive ? "●" : "○"
+        let syncStatusColor = syncActive ? NSColor.syncPurple : NSColor.secondaryLabelColor
+        let syncStatusText = syncActive ? "Sync: Active" : "Sync: Inactive"
+        let syncStatusItem = NSMenuItem(title: "   \(syncStatusIcon) \(syncStatusText)", action: nil, keyEquivalent: "")
+        syncStatusItem.isEnabled = false
+        let syncAttr = NSMutableAttributedString(string: "   \(syncStatusIcon) \(syncStatusText)")
+        syncAttr.addAttribute(.foregroundColor, value: syncStatusColor, range: NSRange(location: 3, length: 1))
+        syncStatusItem.attributedTitle = syncAttr
+        contextMenu.addItem(syncStatusItem)
+        
+        contextMenu.addItem(NSMenuItem.separator())
+        
+        // Refresh status action
+        let refreshItem = NSMenuItem(title: "Refresh Status", action: #selector(refreshConnectionStatus), keyEquivalent: "r")
+        refreshItem.target = self
+        contextMenu.addItem(refreshItem)
         
         contextMenu.addItem(NSMenuItem.separator())
         
@@ -2263,19 +2311,92 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
         showPreferencesWindow()
     }
     
+    @objc func refreshConnectionStatus() {
+        print("🔄 Refreshing connection status...")
+        
+        // Test OmniFocus connection
+        testOmniFocus()
+        
+        // Test Bridge connection if we have a token
+        if let token = userToken {
+            validateToken(token) { [weak self] isValid in
+                DispatchQueue.main.async {
+                    if isValid {
+                        print("✅ Bridge connection verified")
+                        // Send immediate heartbeat to update server
+                        self?.sendHeartbeat()
+                    } else {
+                        print("❌ Bridge connection failed")
+                        self?.clearTokenAndReset()
+                    }
+                    // Update menu after checking both
+                    self?.updateMenuBarMenu()
+                    
+                    // Show notification with status
+                    self?.showStatusNotification()
+                }
+            }
+        } else {
+            // No token, just update menu
+            updateMenuBarMenu()
+            showStatusNotification()
+        }
+    }
+    
+    func showStatusNotification() {
+        let bridgeStatus = (userToken != nil) ? "Connected" : "Not Connected"
+        let ofStatus = omniFocusConnected ? "Connected" : "Not Found"
+        let syncStatus = (userToken != nil && omniFocusConnected) ? "Active" : "Inactive"
+        
+        let center = UNUserNotificationCenter.current()
+        let content = UNMutableNotificationContent()
+        content.title = "AsanaBridge Status"
+        content.body = "Bridge: \(bridgeStatus)\nOmniFocus: \(ofStatus)\nSync: \(syncStatus)"
+        
+        let request = UNNotificationRequest(
+            identifier: "asanabridge-status-\(Date().timeIntervalSince1970)",
+            content: content,
+            trigger: nil
+        )
+        
+        center.add(request) { error in
+            if let error = error {
+                print("⚠️ Status notification error: \(error)")
+            }
+        }
+    }
+    
     func showPreferencesWindow() {
         DispatchQueue.main.async {
+            // Get real-time status
+            let bridgeStatus = (self.userToken != nil) ? "Connected ●" : "Not Connected ○"
+            let ofStatus = self.omniFocusConnected ? "Connected ●" : "Not Found ○"
+            let syncStatus = (self.userToken != nil && self.omniFocusConnected) ? "Active ●" : "Inactive ○"
+            
             let alert = NSAlert()
             alert.messageText = "AsanaBridge Preferences"
-            alert.informativeText = "Sync Interval: Every 5 minutes\nStatus: Connected\nLast Sync: Just now\n\nFor advanced settings, visit asanabridge.com"
+            alert.informativeText = """
+            SYNC STATUS
+            • Bridge: \(bridgeStatus)
+            • OmniFocus: \(ofStatus)
+            • Sync: \(syncStatus)
+            
+            SETTINGS
+            • Sync Interval: Every 5 minutes
+            
+            For advanced settings, visit asanabridge.com
+            """
             alert.addButton(withTitle: "OK")
             alert.addButton(withTitle: "Open Website")
+            alert.addButton(withTitle: "Refresh Status")
             
             let response = alert.runModal()
             if response == .alertSecondButtonReturn {
                 if let url = URL(string: self.webBaseURL) {
                     NSWorkspace.shared.open(url)
                 }
+            } else if response == .alertThirdButtonReturn {
+                self.refreshConnectionStatus()
             }
         }
     }

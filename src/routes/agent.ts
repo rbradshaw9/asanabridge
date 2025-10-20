@@ -460,13 +460,22 @@ router.get('/status', authenticateToken, async (req: AuthenticatedRequest, res: 
     const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
     const isOnline = setup.isActive && setup.updatedAt > tenMinutesAgo;
 
+    // Calculate time since last heartbeat for diagnostics
+    const timeSinceHeartbeat = Date.now() - setup.updatedAt.getTime();
+    const minutesSinceHeartbeat = Math.floor(timeSinceHeartbeat / 1000 / 60);
+
     res.json({
       isOnline,
       connected: isOnline, // For backwards compatibility
       version: setup.version,
       lastSeen: setup.updatedAt,
       lastHeartbeat: setup.updatedAt,
-      hasKey: !!setup.agentKey
+      hasKey: !!setup.agentKey,
+      diagnostic: {
+        isActive: setup.isActive,
+        minutesSinceLastHeartbeat: minutesSinceHeartbeat,
+        heartbeatWithinThreshold: setup.updatedAt > tenMinutesAgo
+      }
     });
   } catch (error) {
     logger.error('Failed to get agent status', error);
