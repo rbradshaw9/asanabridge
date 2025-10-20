@@ -2057,6 +2057,9 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
             apiClient = AsanaBridgeAPIClient(token: token, agentKey: "simple", baseURL: apiBaseURL)
         }
         
+        // Send initial heartbeat immediately to update web app status
+        sendHeartbeat()
+        
         // Begin sync process
         startSyncTimer()
         
@@ -2662,6 +2665,9 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
     
     func startPeriodicSync() {
         logMessage("Starting periodic sync operations")
+        
+        // Send initial heartbeat immediately
+        sendHeartbeat()
         
         // Send heartbeat every 5 minutes to show agent is alive
         Timer.scheduledTimer(withTimeInterval: 300, repeats: true) { [weak self] _ in

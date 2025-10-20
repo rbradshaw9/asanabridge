@@ -447,15 +447,25 @@ router.get('/status', authenticateToken, async (req: AuthenticatedRequest, res: 
 
     if (!setup) {
       return res.json({ 
+        isOnline: false,
         connected: false,
-        message: 'No agent configured' 
+        message: 'No agent configured',
+        hasKey: false
       });
     }
 
+    // Consider agent online if:
+    // 1. isActive is true
+    // 2. Last heartbeat was within 10 minutes
+    const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
+    const isOnline = setup.isActive && setup.updatedAt > tenMinutesAgo;
+
     res.json({
-      connected: setup.isActive,
+      isOnline,
+      connected: isOnline, // For backwards compatibility
       version: setup.version,
       lastSeen: setup.updatedAt,
+      lastHeartbeat: setup.updatedAt,
       hasKey: !!setup.agentKey
     });
   } catch (error) {
