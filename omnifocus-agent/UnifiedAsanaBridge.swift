@@ -2595,68 +2595,6 @@ class AsanaBridgeApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
         }
     }
-}
-
-// Simple HTTP Server for local agent
-class HTTPServer {
-    private var listener: NWListener?
-    private var agentKey: String = ""
-    
-    func start(port: UInt16, agentKey: String) {
-        self.agentKey = agentKey
-        
-        let parameters = NWParameters.tcp
-        let port = NWEndpoint.Port(rawValue: port)!
-        
-        listener = try? NWListener(using: parameters, on: port)
-        
-        listener?.newConnectionHandler = { connection in
-            self.handleConnection(connection)
-        }
-        
-        listener?.start(queue: .global())
-    }
-    
-    private func handleConnection(_ connection: NWConnection) {
-        connection.start(queue: .global())
-        
-        connection.receive(minimumIncompleteLength: 1, maximumLength: 65536) { data, _, isComplete, error in
-            if let data = data, !data.isEmpty {
-                self.handleRequest(data: data, connection: connection)
-            }
-            
-            if isComplete {
-                connection.cancel()
-            }
-        }
-    }
-    
-    private func handleRequest(data: Data, connection: NWConnection) {
-        let request = String(data: data, encoding: .utf8) ?? ""
-        
-        var response = ""
-        
-        if request.contains("GET /health") {
-            response = """
-            HTTP/1.1 200 OK\\r\\n
-            Content-Type: application/json\\r\\n
-            Content-Length: 25\\r\\n
-            \\r\\n
-            {"status": "ok", "agent": "running"}
-            """
-        } else {
-            response = """
-            HTTP/1.1 404 Not Found\\r\\n
-            Content-Length: 0\\r\\n
-            \\r\\n
-            """
-        }
-        
-        let responseData = response.data(using: .utf8)!
-        connection.send(content: responseData, completion: .contentProcessed { _ in
-            connection.cancel()
-        })
-    }
     
     // MARK: - Agent Registration and Communication
     
@@ -2768,7 +2706,7 @@ class HTTPServer {
         logMessage("Starting OmniFocus sync...")
         
         // Check OmniFocus connection first
-        checkOmniFocusConnection()
+        testOmniFocus()
         
         if !omniFocusConnected {
             logMessage("OmniFocus not available - skipping sync")
@@ -2788,6 +2726,68 @@ class HTTPServer {
                 logMessage("❌ OmniFocus sync failed: \(error.localizedDescription)", level: .error)
             }
         }
+    }
+}
+
+// Simple HTTP Server for local agent
+class HTTPServer {
+    private var listener: NWListener?
+    private var agentKey: String = ""
+    
+    func start(port: UInt16, agentKey: String) {
+        self.agentKey = agentKey
+        
+        let parameters = NWParameters.tcp
+        let port = NWEndpoint.Port(rawValue: port)!
+        
+        listener = try? NWListener(using: parameters, on: port)
+        
+        listener?.newConnectionHandler = { connection in
+            self.handleConnection(connection)
+        }
+        
+        listener?.start(queue: .global())
+    }
+    
+    private func handleConnection(_ connection: NWConnection) {
+        connection.start(queue: .global())
+        
+        connection.receive(minimumIncompleteLength: 1, maximumLength: 65536) { data, _, isComplete, error in
+            if let data = data, !data.isEmpty {
+                self.handleRequest(data: data, connection: connection)
+            }
+            
+            if isComplete {
+                connection.cancel()
+            }
+        }
+    }
+    
+    private func handleRequest(data: Data, connection: NWConnection) {
+        let request = String(data: data, encoding: .utf8) ?? ""
+        
+        var response = ""
+        
+        if request.contains("GET /health") {
+            response = """
+            HTTP/1.1 200 OK\\r\\n
+            Content-Type: application/json\\r\\n
+            Content-Length: 25\\r\\n
+            \\r\\n
+            {"status": "ok", "agent": "running"}
+            """
+        } else {
+            response = """
+            HTTP/1.1 404 Not Found\\r\\n
+            Content-Length: 0\\r\\n
+            \\r\\n
+            """
+        }
+        
+        let responseData = response.data(using: .utf8)!
+        connection.send(content: responseData, completion: .contentProcessed { _ in
+            connection.cancel()
+        })
     }
 }
 
