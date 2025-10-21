@@ -20,6 +20,9 @@ class SimpleAsanaBridgeApp: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         print("🚀 AsanaBridge starting...")
         
+        // Set as menu bar app (accessory)
+        NSApp.setActivationPolicy(.accessory)
+        
         // Setup menu bar icon
         setupMenuBar()
         
@@ -385,8 +388,10 @@ class SimpleAsanaBridgeApp: NSObject, NSApplicationDelegate {
 
 // MARK: - Main Entry Point
 
-let app = NSApplication.shared
-let delegate = SimpleAsanaBridgeApp()
-app.delegate = delegate
-app.setActivationPolicy(.accessory)
-app.run()
+// Create autoreleasepool to prevent memory leaks
+autoreleasepool {
+    let app = NSApplication.shared
+    let delegate = SimpleAsanaBridgeApp()
+    app.delegate = delegate
+    app.run()
+}
