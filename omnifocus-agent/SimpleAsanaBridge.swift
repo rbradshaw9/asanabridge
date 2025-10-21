@@ -181,73 +181,123 @@ class SimpleAsanaBridgeApp: NSObject, NSApplicationDelegate {
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
         
-        // Show alert with login instructions
+        // Create login window
         let alert = NSAlert()
-        alert.messageText = "Welcome to AsanaBridge!"
-        alert.informativeText = "To get started:\n\n1. Click 'Open Dashboard' to sign in via your browser\n2. After signing in, copy your authentication token\n3. Click 'Enter Token' and paste it\n\nThe app will then sync your OmniFocus tasks automatically."
+        alert.messageText = "Sign in to AsanaBridge"
+        alert.informativeText = "Enter your AsanaBridge account credentials to connect your OmniFocus sync."
         alert.alertStyle = .informational
-        alert.addButton(withTitle: "Open Dashboard")
-        alert.addButton(withTitle: "Enter Token")
+        alert.addButton(withTitle: "Sign In")
         alert.addButton(withTitle: "Cancel")
+        
+        // Create input fields
+        let stackView = NSStackView(frame: NSRect(x: 0, y: 0, width: 300, height: 80))
+        stackView.orientation = .vertical
+        stackView.spacing = 8
+        
+        let emailField = NSTextField(frame: NSRect(x: 0, y: 0, width: 300, height: 24))
+        emailField.placeholderString = "Email"
+        
+        let passwordField = NSSecureTextField(frame: NSRect(x: 0, y: 0, width: 300, height: 24))
+        passwordField.placeholderString = "Password"
+        
+        stackView.addArrangedSubview(emailField)
+        stackView.addArrangedSubview(passwordField)
+        
+        alert.accessoryView = stackView
+        
+        // Make email field first responder
+        alert.window.initialFirstResponder = emailField
         
         let response = alert.runModal()
         
         if response == .alertFirstButtonReturn {
-            // Open dashboard
-            if let url = URL(string: "\(baseURL)/login") {
-                NSWorkspace.shared.open(url)
+            let email = emailField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+            let password = passwordField.stringValue
+            
+            if !email.isEmpty && !password.isEmpty {
+                // Show progress
+                let progressAlert = NSAlert()
+                progressAlert.messageText = "Signing in..."
+                progressAlert.informativeText = "Please wait..."
+                progressAlert.alertStyle = .informational
+                
+                // Perform login in background
+                performLogin(email: email, password: password) { success, token, error in
+                    DispatchQueue.main.async {
+                        if success, let token = token {
+                            self.saveToken(token)
+                            self.startSync()
+                            
+                            let successAlert = NSAlert()
+                            successAlert.messageText = "✅ Signed In Successfully!"
+                            successAlert.informativeText = "AsanaBridge is now syncing your OmniFocus tasks."
+                            successAlert.alertStyle = .informational
+                            successAlert.runModal()
+                            
+                            NSApp.setActivationPolicy(.accessory)
+                        } else {
+                            let errorAlert = NSAlert()
+                            errorAlert.messageText = "Sign In Failed"
+                            errorAlert.informativeText = error ?? "Invalid email or password. Please try again."
+                            errorAlert.alertStyle = .warning
+                            errorAlert.runModal()
+                            
+                            // Show login again
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                                self.showLogin()
+                            }
+                        }
+                    }
+                }
+            } else {
+                let errorAlert = NSAlert()
+                errorAlert.messageText = "Invalid Input"
+                errorAlert.informativeText = "Please enter both email and password."
+                errorAlert.alertStyle = .warning
+                errorAlert.runModal()
+                
+                // Show login again
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    self.showLogin()
+                }
             }
-            // Show token input after a delay
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-                self.showTokenInput()
-            }
-        } else if response == .alertSecondButtonReturn {
-            // Go straight to token input
-            showTokenInput()
         } else {
-            // Cancel - go back to menu bar mode
             NSApp.setActivationPolicy(.accessory)
         }
     }
     
-    func showTokenInput() {
-        let alert = NSAlert()
-        alert.messageText = "Enter Authentication Token"
-        alert.informativeText = "Copy your token from the dashboard and paste it below.\n\nYou can find it on your Account page after signing in."
-        alert.addButton(withTitle: "Connect")
-        alert.addButton(withTitle: "Cancel")
+    func performLogin(email: String, password: String, completion: @escaping (Bool, String?, String?) -> Void) {
+        let url = URL(string: "\(baseURL)/api/auth/app-login-direct")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         
-        let inputField = NSTextField(frame: NSRect(x: 0, y: 0, width: 400, height: 24))
-        inputField.placeholderString = "Paste your token here..."
-        alert.accessoryView = inputField
+        let body: [String: String] = ["email": email, "password": password]
+        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
         
-        let response = alert.runModal()
-        if response == .alertFirstButtonReturn {
-            let token = inputField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !token.isEmpty {
-                saveToken(token)
-                startSync()
-                
-                // Show success message
-                let successAlert = NSAlert()
-                successAlert.messageText = "✅ Connected!"
-                successAlert.informativeText = "AsanaBridge is now syncing your OmniFocus tasks.\n\nYou'll see the icon in your menu bar."
-                successAlert.alertStyle = .informational
-                successAlert.runModal()
-                
-                // Return to menu bar mode
-                NSApp.setActivationPolicy(.accessory)
-            } else {
-                let errorAlert = NSAlert()
-                errorAlert.messageText = "Invalid Token"
-                errorAlert.informativeText = "Please enter a valid authentication token."
-                errorAlert.alertStyle = .warning
-                errorAlert.runModal()
+        URLSession.shared.dataTask(with: request) { data, response, error in
+            if let error = error {
+                print("❌ Login error: \(error)")
+                completion(false, nil, "Network error. Please check your internet connection.")
+                return
             }
-        } else {
-            // Return to menu bar mode
-            NSApp.setActivationPolicy(.accessory)
-        }
+            
+            guard let data = data,
+                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                completion(false, nil, "Invalid response from server.")
+                return
+            }
+            
+            if let token = json["token"] as? String {
+                print("✅ Login successful!")
+                completion(true, token, nil)
+            } else if let errorMsg = json["error"] as? String {
+                print("❌ Login failed: \(errorMsg)")
+                completion(false, nil, errorMsg)
+            } else {
+                completion(false, nil, "Invalid email or password.")
+            }
+        }.resume()
     }
     
     @objc func signOut() {
