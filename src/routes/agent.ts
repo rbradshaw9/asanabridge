@@ -1,3 +1,5 @@
+
+
 import { Router, Request, Response } from 'express';
 import { authenticateToken, AuthenticatedRequest } from '../services/auth';
 import { agentLogger as logger } from '../config/logger';
@@ -512,6 +514,29 @@ router.get('/status', authenticateToken, async (req: AuthenticatedRequest, res: 
   } catch (error) {
     logger.error('Failed to get agent status', error);
     res.status(500).json({ error: 'Failed to get status' });
+  }
+});
+// Get recent sync logs for dashboard verification
+router.get('/recent-syncs', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const userId = req.user!.userId;
+    const logs = await prisma.syncLog.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+      include: {
+        syncMapping: {
+          select: {
+            asanaProjectName: true,
+            ofProjectName: true
+          }
+        }
+      }
+    });
+    res.json({ logs });
+  } catch (error) {
+    logger.error('Failed to fetch recent sync logs', error);
+    res.status(500).json({ error: 'Failed to fetch recent sync logs' });
   }
 });
 
