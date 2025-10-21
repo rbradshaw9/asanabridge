@@ -48,6 +48,8 @@ cat > "$APP_PATH/Contents/Info.plist" << EOF
     <string>$VERSION</string>
     <key>CFBundleVersion</key>
     <string>$VERSION</string>
+    <key>CFBundleIconFile</key>
+    <string>AsanaBridge.icns</string>
     <key>LSMinimumSystemVersion</key>
     <string>10.15</string>
     <key>LSUIElement</key>
