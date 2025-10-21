@@ -522,6 +522,72 @@ router.get('/test', (_req: Request, res: Response) => {
   res.json({ message: 'Agent routes working!', timestamp: new Date().toISOString() });
 });
 
+// Sync endpoint - receives OmniFocus tasks and logs detailed sync activity
+router.post('/sync', authenticateAgent, async (req: Request, res: Response) => {
+  try {
+    const { tasks } = req.body;
+    const userId = (req as any).agentUser.id;
+    
+    if (!tasks || !Array.isArray(tasks)) {
+      return res.status(400).json({ error: 'Tasks array required' });
+    }
+
+    // Get the first active sync mapping for this user (or create a default one)
+    let mapping = await prisma.syncMapping.findFirst({
+      where: { userId, isActive: true }
+    });
+
+    // If no mapping exists, we'll just log the activity without a mapping
+    const syncDetails = {
+      timestamp: new Date().toISOString(),
+      omnifocus: {
+        tasksReceived: tasks.length,
+        taskNames: tasks.map((t: any) => t.name).slice(0, 10), // First 10 task names
+        sampleTasks: tasks.slice(0, 3).map((t: any) => ({ // First 3 full tasks
+          name: t.name,
+          note: t.note ? t.note.substring(0, 100) : '',
+          id: t.id
+        }))
+      },
+      asana: {
+        tasksCreated: 0,
+        tasksUpdated: 0,
+        errors: []
+      }
+    };
+
+    // Create sync log entry if we have a mapping
+    if (mapping) {
+      await prisma.syncLog.create({
+        data: {
+          userId,
+          syncMappingId: mapping.id,
+          direction: 'OF_TO_ASANA',
+          status: 'SUCCESS',
+          itemsSynced: tasks.length,
+          errorMessage: JSON.stringify(syncDetails) // Store details as JSON string
+        }
+      });
+    }
+
+    logger.info('OmniFocus sync received', {
+      userId,
+      taskCount: tasks.length,
+      taskNames: syncDetails.omnifocus.taskNames,
+      hasMappings: !!mapping
+    });
+
+    res.json({
+      success: true,
+      message: `Received ${tasks.length} tasks from OmniFocus`,
+      details: syncDetails
+    });
+  } catch (error) {
+    logger.error('Sync endpoint error', error);
+    res.status(500).json({ error: 'Sync failed' });
+  }
+});
+
 // Get recent sync logs for dashboard verification
 router.get('/recent-syncs', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {

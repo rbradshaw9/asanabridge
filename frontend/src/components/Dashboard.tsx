@@ -230,33 +230,108 @@ const RecentSyncsSection: React.FC = () => {
         </div>
       ) : (
         <div className="space-y-2 max-h-96 overflow-y-auto">
-          {syncs.map((sync: any, index: number) => (
-            <div
-              key={index}
-              className="p-3 bg-white/5 rounded-lg border border-white/10 hover:bg-white/10 transition-colors"
-            >
-              <div className="flex items-start justify-between gap-2">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    {sync.status === 'success' ? (
-                      <CheckCircle className="text-green-400 flex-shrink-0" size={16} />
+          {syncs.map((sync: any, index: number) => {
+            // Try to parse details from errorMessage if it's JSON
+            let details = null;
+            try {
+              if (sync.errorMessage && sync.errorMessage.startsWith('{')) {
+                details = JSON.parse(sync.errorMessage);
+              }
+            } catch (e) {
+              // Not JSON, just regular error message
+            }
+
+            return (
+              <div
+                key={index}
+                className="p-4 bg-white/5 rounded-lg border border-white/10 hover:bg-white/10 transition-colors"
+              >
+                <div className="flex items-start justify-between gap-3 mb-2">
+                  <div className="flex items-center gap-2">
+                    {sync.status === 'SUCCESS' ? (
+                      <CheckCircle className="text-green-400 flex-shrink-0" size={18} />
                     ) : (
-                      <XCircle className="text-red-400 flex-shrink-0" size={16} />
+                      <XCircle className="text-red-400 flex-shrink-0" size={18} />
                     )}
-                    <span className="text-white font-medium text-sm truncate">
-                      {sync.syncMapping?.ofProjectName || 'Unknown Project'}
-                    </span>
+                    <div>
+                      <p className="text-white font-medium">
+                        {sync.direction === 'OF_TO_ASANA' ? '📤 OmniFocus → Asana' :
+                         sync.direction === 'ASANA_TO_OF' ? '📥 Asana → OmniFocus' :
+                         '🔄 Bidirectional'}
+                      </p>
+                      <p className="text-xs text-gray-400">
+                        {new Date(sync.createdAt).toLocaleString()}
+                      </p>
+                    </div>
                   </div>
-                  <p className="text-gray-400 text-xs truncate">
-                    {sync.tasksProcessed || 0} task{sync.tasksProcessed !== 1 ? 's' : ''} • {sync.message || 'Synced'}
-                  </p>
+                  <div className="text-right">
+                    <p className="text-blue-400 font-semibold">{sync.itemsSynced} tasks</p>
+                  </div>
                 </div>
-                <span className="text-gray-500 text-xs flex-shrink-0">
-                  {new Date(sync.createdAt).toLocaleTimeString()}
-                </span>
+
+                {/* Show detailed sync information if available */}
+                {details && details.omnifocus && (
+                  <div className="mt-3 p-3 bg-black/20 rounded border border-white/5">
+                    <div className="grid grid-cols-2 gap-4">
+                      {/* OmniFocus side */}
+                      <div>
+                        <p className="text-xs font-semibold text-gray-400 mb-1">📋 OMNIFOCUS</p>
+                        <p className="text-sm text-white">
+                          {details.omnifocus.tasksReceived} tasks received
+                        </p>
+                        {details.omnifocus.taskNames && details.omnifocus.taskNames.length > 0 && (
+                          <div className="mt-2">
+                            <p className="text-xs text-gray-500 mb-1">Tasks:</p>
+                            <ul className="text-xs text-gray-300 space-y-0.5">
+                              {details.omnifocus.taskNames.slice(0, 3).map((name: string, i: number) => (
+                                <li key={i} className="truncate">• {name}</li>
+                              ))}
+                              {details.omnifocus.taskNames.length > 3 && (
+                                <li className="text-gray-500">+ {details.omnifocus.taskNames.length - 3} more</li>
+                              )}
+                            </ul>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Asana side */}
+                      <div>
+                        <p className="text-xs font-semibold text-gray-400 mb-1">📊 ASANA</p>
+                        <div className="text-sm text-white space-y-1">
+                          {details.asana.tasksCreated > 0 && (
+                            <p className="text-green-400">✓ {details.asana.tasksCreated} created</p>
+                          )}
+                          {details.asana.tasksUpdated > 0 && (
+                            <p className="text-blue-400">⟳ {details.asana.tasksUpdated} updated</p>
+                          )}
+                          {details.asana.tasksCreated === 0 && details.asana.tasksUpdated === 0 && (
+                            <p className="text-gray-500">Pending sync...</p>
+                          )}
+                          {details.asana.errors && details.asana.errors.length > 0 && (
+                            <p className="text-red-400">⚠ {details.asana.errors.length} errors</p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Show project info if available */}
+                {sync.syncMapping && (
+                  <div className="mt-2 text-xs text-gray-400">
+                    {sync.syncMapping.ofProjectName} ↔ {sync.syncMapping.asanaProjectName}
+                  </div>
+                )}
+
+                {/* Show error message if it's not JSON details */}
+                {sync.errorMessage && !details && (
+                  <div className="mt-2 text-xs text-red-400">
+                    {sync.errorMessage}
+                  </div>
+                )}
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
