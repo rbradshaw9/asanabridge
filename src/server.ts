@@ -208,7 +208,14 @@ app.get('/live', (_req: express.Request, res: express.Response) => {
 });
 
 // Serve static files from public directory (for downloads, etc.)
-app.use('/public', express.static('public'));
+app.use('/public', express.static('public', {
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('.dmg')) {
+      res.setHeader('Content-Type', 'application/x-apple-diskimage');
+      res.setHeader('Content-Disposition', 'attachment');
+    }
+  }
+}));
 
 // Serve React app static files
 app.use(express.static(path.join(__dirname, '../frontend/dist')));
