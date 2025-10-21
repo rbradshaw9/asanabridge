@@ -9,6 +9,8 @@ class SimpleAsanaBridgeApp: NSObject, NSApplicationDelegate {
     var userToken: String?
     var syncTimer: Timer?
     var heartbeatTimer: Timer?
+    var syncMappings: [[String: Any]] = []
+    var projectNameCache: [String: String] = [:] // Maps Asana project name to actual OF project name created
     
     #if DEBUG
     let baseURL = "http://localhost:3000"
@@ -337,6 +339,9 @@ class SimpleAsanaBridgeApp: NSObject, NSApplicationDelegate {
         // Register with server
         registerAgent()
         
+        // Fetch sync mappings
+        fetchSyncMappings()
+        
         // Start heartbeat timer (every 60 seconds)
         heartbeatTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
             self?.sendHeartbeat()
@@ -382,6 +387,127 @@ class SimpleAsanaBridgeApp: NSObject, NSApplicationDelegate {
         }.resume()
     }
     
+    func fetchSyncMappings() {
+        guard let token = userToken else { return }
+        
+        let url = URL(string: "\(baseURL)/api/agent/mappings")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        
+        URLSession.shared.dataTask(with: request) { data, response, error in
+            if let error = error {
+                print("❌ Failed to fetch mappings: \(error)")
+                return
+            }
+            
+            guard let data = data,
+                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let mappings = json["mappings"] as? [[String: Any]] else {
+                print("❌ Invalid mappings response")
+                return
+            }
+            
+            self.syncMappings = mappings
+            print("✅ Loaded \(mappings.count) sync mappings")
+            
+            // Create OmniFocus projects for each mapping
+            self.ensureOmniFocusProjects()
+        }.resume()
+    }
+    
+    func ensureOmniFocusProjects() {
+        for mapping in syncMappings {
+            guard let asanaProjectName = mapping["asanaProjectName"] as? String else { continue }
+            
+            // Try to create/find the OmniFocus project
+            let ofProjectName = createOmniFocusProject(asanaProjectName: asanaProjectName)
+            if !ofProjectName.isEmpty {
+                projectNameCache[asanaProjectName] = ofProjectName
+                print("📁 Mapped '\(asanaProjectName)' → '\(ofProjectName)'")
+            }
+        }
+    }
+    
+    func createOmniFocusProject(asanaProjectName: String) -> String {
+        // Use emoji prefix to identify Asana-synced projects
+        let preferredName = "📊 \(asanaProjectName)"
+        
+        let script = """
+        function run() {
+            const app = Application('OmniFocus');
+            app.includeStandardAdditions = true;
+            
+            if (!app.running()) {
+                return JSON.stringify({error: 'OmniFocus not running', projectName: ''});
+            }
+            
+            try {
+                const doc = app.defaultDocument();
+                const preferredName = '\(preferredName.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "'", with: "\\'"))';
+                const baseName = '\(asanaProjectName.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "'", with: "\\'"))';
+                
+                // Check if project with preferred name already exists
+                const existingProjects = doc.flattenedProjects();
+                for (let i = 0; i < existingProjects.length; i++) {
+                    if (existingProjects[i].name() === preferredName) {
+                        return JSON.stringify({projectName: preferredName, created: false});
+                    }
+                }
+                
+                // Try variations if needed
+                let finalName = preferredName;
+                let suffix = 1;
+                let exists = true;
+                
+                while (exists && suffix < 10) {
+                    exists = false;
+                    for (let i = 0; i < existingProjects.length; i++) {
+                        if (existingProjects[i].name() === finalName) {
+                            exists = true;
+                            suffix++;
+                            finalName = baseName + ' (Asana ' + suffix + ')';
+                            break;
+                        }
+                    }
+                }
+                
+                // Create the project
+                const newProject = doc.Project({name: finalName});
+                doc.projects.push(newProject);
+                
+                return JSON.stringify({projectName: finalName, created: true});
+            } catch (error) {
+                return JSON.stringify({error: error.toString(), projectName: ''});
+            }
+        }
+        """
+        
+        var error: NSDictionary?
+        if let scriptObject = NSAppleScript(source: script) {
+            let output = scriptObject.executeAndReturnError(&error)
+            
+            if let error = error {
+                print("❌ Project creation error: \(error)")
+                return ""
+            }
+            
+            if let jsonString = output.stringValue,
+               let jsonData = jsonString.data(using: .utf8),
+               let result = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any],
+               let projectName = result["projectName"] as? String {
+                if let created = result["created"] as? Bool, created {
+                    print("✅ Created OmniFocus project: \(projectName)")
+                } else {
+                    print("ℹ️ Using existing OmniFocus project: \(projectName)")
+                }
+                return projectName
+            }
+        }
+        
+        return ""
+    }
+    
     func sendHeartbeat() {
         guard let token = userToken else { return }
         
@@ -410,6 +536,13 @@ class SimpleAsanaBridgeApp: NSObject, NSApplicationDelegate {
     func performSync() {
         print("🔄 Performing sync...")
         
+        // Ensure we have mappings
+        if syncMappings.isEmpty {
+            print("⚠️ No sync mappings, fetching...")
+            fetchSyncMappings()
+            return
+        }
+        
         // Get OmniFocus tasks
         let tasks = getOmniFocusTasks()
         
@@ -432,23 +565,52 @@ class SimpleAsanaBridgeApp: NSObject, NSApplicationDelegate {
             app.includeStandardAdditions = true;
             
             if (!app.running()) {
-                return JSON.stringify([]);
+                return JSON.stringify({error: 'OmniFocus not running', tasks: []});
             }
             
-            const doc = app.defaultDocument();
-            const inbox = doc.inboxTasks();
-            
-            const tasks = [];
-            for (let i = 0; i < Math.min(inbox.length, 10); i++) {
-                const task = inbox[i];
-                tasks.push({
-                    name: task.name(),
-                    note: task.note() || '',
-                    id: task.id()
-                });
+            try {
+                const doc = app.defaultDocument();
+                const allTasks = [];
+                
+                // Get tasks from all projects (not just inbox)
+                const flattenedTasks = doc.flattenedTasks();
+                
+                // Get up to 50 tasks that are not completed
+                let count = 0;
+                for (let i = 0; i < flattenedTasks.length && count < 50; i++) {
+                    const task = flattenedTasks[i];
+                    
+                    // Skip completed tasks
+                    if (task.completed()) {
+                        continue;
+                    }
+                    
+                    // Get project name if available
+                    let projectName = 'No Project';
+                    try {
+                        const containingProject = task.containingProject();
+                        if (containingProject) {
+                            projectName = containingProject.name();
+                        }
+                    } catch (e) {
+                        // Task might not have a project
+                    }
+                    
+                    allTasks.push({
+                        name: task.name(),
+                        note: task.note() || '',
+                        id: task.id(),
+                        project: projectName,
+                        completed: false
+                    });
+                    
+                    count++;
+                }
+                
+                return JSON.stringify({tasks: allTasks, count: allTasks.length});
+            } catch (error) {
+                return JSON.stringify({error: error.toString(), tasks: []});
             }
-            
-            return JSON.stringify(tasks);
         }
         """
         
@@ -463,8 +625,13 @@ class SimpleAsanaBridgeApp: NSObject, NSApplicationDelegate {
             
             if let jsonString = output.stringValue,
                let jsonData = jsonString.data(using: .utf8),
-               let parsed = try? JSONSerialization.jsonObject(with: jsonData) as? [[String: Any]] {
-                tasks = parsed
+               let parsed = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any],
+               let taskArray = parsed["tasks"] as? [[String: Any]] {
+                tasks = taskArray
+                print("📋 Found \(tasks.count) tasks in OmniFocus")
+                if let errorMsg = parsed["error"] as? String {
+                    print("⚠️ OmniFocus warning: \(errorMsg)")
+                }
             }
         }
         

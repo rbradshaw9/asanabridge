@@ -614,4 +614,24 @@ router.get('/recent-syncs', authenticateToken, async (req: AuthenticatedRequest,
   }
 });
 
+// Get OmniFocus projects - returns cached list or prompts agent to fetch
+router.get('/omnifocus-projects', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const userId = req.user!.userId;
+    
+    // For now, return a simple response
+    // In a full implementation, you'd store this in a cache or have the agent send it
+    res.json({ 
+      projects: [
+        { name: 'Inbox', id: 'inbox' },
+        { name: 'All Tasks', id: 'all' }
+      ],
+      message: 'To see your actual OmniFocus projects, the desktop app needs to send them. This will be implemented in the next update.'
+    });
+  } catch (error) {
+    logger.error('Failed to fetch OmniFocus projects', error);
+    res.status(500).json({ error: 'Failed to fetch OmniFocus projects' });
+  }
+});
+
 export default router;

@@ -236,9 +236,17 @@ const RecentSyncsSection: React.FC = () => {
             try {
               if (sync.errorMessage && sync.errorMessage.startsWith('{')) {
                 details = JSON.parse(sync.errorMessage);
+                // Ensure arrays exist
+                if (details.omnifocus && !Array.isArray(details.omnifocus.taskNames)) {
+                  details.omnifocus.taskNames = [];
+                }
+                if (details.asana && !Array.isArray(details.asana.errors)) {
+                  details.asana.errors = [];
+                }
               }
             } catch (e) {
               // Not JSON, just regular error message
+              console.error('Failed to parse sync details:', e);
             }
 
             return (
