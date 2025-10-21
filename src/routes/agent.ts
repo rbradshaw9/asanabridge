@@ -516,9 +516,16 @@ router.get('/status', authenticateToken, async (req: AuthenticatedRequest, res: 
     res.status(500).json({ error: 'Failed to get status' });
   }
 });
+
+// Simple test endpoint to verify routes are working
+router.get('/test', (_req: Request, res: Response) => {
+  res.json({ message: 'Agent routes working!', timestamp: new Date().toISOString() });
+});
+
 // Get recent sync logs for dashboard verification
 router.get('/recent-syncs', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
+    logger.info('Recent syncs endpoint hit', { userId: req.user?.userId });
     const userId = req.user!.userId;
     const logs = await prisma.syncLog.findMany({
       where: { userId },
@@ -533,6 +540,7 @@ router.get('/recent-syncs', authenticateToken, async (req: AuthenticatedRequest,
         }
       }
     });
+    logger.info('Recent syncs fetched', { count: logs.length });
     res.json({ logs });
   } catch (error) {
     logger.error('Failed to fetch recent sync logs', error);
