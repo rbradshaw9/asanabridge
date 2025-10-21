@@ -66,6 +66,14 @@ if [ -f "AsanaBridge.icns" ]; then
     cp "AsanaBridge.icns" "$APP_PATH/Contents/Resources/"
 fi
 
+# Sign the app to prevent "damaged" error
+echo "🔐 Code signing app..."
+codesign --force --deep --sign - "$APP_PATH"
+
+# Remove quarantine attribute
+echo "🔓 Removing quarantine..."
+xattr -cr "$APP_PATH"
+
 echo "✅ Build complete: $APP_PATH"
 echo ""
 echo "📦 To create DMG:"
