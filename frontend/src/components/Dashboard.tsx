@@ -141,6 +141,116 @@ const UserMenu: React.FC<{
   );
 };
 
+// Recent Syncs Section Component
+const RecentSyncsSection: React.FC = () => {
+  const [syncs, setSyncs] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    fetchRecentSyncs();
+  }, []);
+
+  const fetchRecentSyncs = async () => {
+    try {
+      setLoading(true);
+      const response = await authApi('/api/agent/recent-syncs');
+      if (response.logs) {
+        setSyncs(response.logs);
+      }
+    } catch (err: any) {
+      console.error('Failed to fetch recent syncs:', err);
+      setError(err.message || 'Failed to load recent syncs');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="bg-white/10 backdrop-blur-md rounded-xl p-6 border border-white/20">
+        <h3 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
+          <Activity size={20} />
+          Recent Syncs
+        </h3>
+        <div className="text-center py-8">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto mb-4"></div>
+          <p className="text-gray-400">Loading recent syncs...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="bg-white/10 backdrop-blur-md rounded-xl p-6 border border-white/20">
+        <h3 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
+          <Activity size={20} />
+          Recent Syncs
+        </h3>
+        <div className="text-center py-8">
+          <p className="text-red-400">{error}</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-white/10 backdrop-blur-md rounded-xl p-6 border border-white/20">
+      <h3 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
+        <Activity size={20} />
+        Recent Syncs
+        <button
+          onClick={fetchRecentSyncs}
+          className="ml-auto text-gray-400 hover:text-white transition-colors"
+          title="Refresh"
+        >
+          <RefreshCw size={16} />
+        </button>
+      </h3>
+      {syncs.length === 0 ? (
+        <div className="text-center py-8">
+          <div className="w-16 h-16 bg-gray-600/50 rounded-full flex items-center justify-center mx-auto mb-4">
+            <Activity className="text-gray-400" size={32} />
+          </div>
+          <p className="text-gray-400 text-lg">No syncs yet</p>
+          <p className="text-gray-500 text-sm">Tasks will appear here when they're synced from OmniFocus</p>
+        </div>
+      ) : (
+        <div className="space-y-2 max-h-96 overflow-y-auto">
+          {syncs.map((sync: any, index: number) => (
+            <div
+              key={index}
+              className="p-3 bg-white/5 rounded-lg border border-white/10 hover:bg-white/10 transition-colors"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    {sync.status === 'success' ? (
+                      <CheckCircle className="text-green-400 flex-shrink-0" size={16} />
+                    ) : (
+                      <XCircle className="text-red-400 flex-shrink-0" size={16} />
+                    )}
+                    <span className="text-white font-medium text-sm truncate">
+                      {sync.syncMapping?.ofProjectName || 'Unknown Project'}
+                    </span>
+                  </div>
+                  <p className="text-gray-400 text-xs truncate">
+                    {sync.tasksProcessed || 0} task{sync.tasksProcessed !== 1 ? 's' : ''} • {sync.message || 'Synced'}
+                  </p>
+                </div>
+                <span className="text-gray-500 text-xs flex-shrink-0">
+                  {new Date(sync.createdAt).toLocaleTimeString()}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
 const Dashboard: React.FC = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
@@ -849,20 +959,8 @@ const Dashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* Recent Activity */}
-        <div className="bg-white/10 backdrop-blur-md rounded-xl p-6 border border-white/20">
-          <h3 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
-            <Activity size={20} />
-            Recent Activity
-          </h3>
-          <div className="text-center py-8">
-            <div className="w-16 h-16 bg-gray-600/50 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Activity className="text-gray-400" size={32} />
-            </div>
-            <p className="text-gray-400 text-lg">No activity yet</p>
-            <p className="text-gray-500 text-sm">Connect your integrations to start syncing</p>
-          </div>
-        </div>
+        {/* Recent Syncs */}
+        <RecentSyncsSection />
       </main>
 
       {/* Project Selection Modal */}
