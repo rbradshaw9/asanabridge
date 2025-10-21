@@ -29,11 +29,16 @@ class SimpleAsanaBridgeApp: NSObject, NSApplicationDelegate {
         // Load saved token
         loadToken()
         
-        // Start sync if authenticated
-        if userToken != nil {
+        // Start sync if authenticated, otherwise show login
+        if let token = userToken, !token.isEmpty {
+            print("✅ Found saved token, starting sync...")
             startSync()
         } else {
-            showLogin()
+            print("ℹ️ No token found, showing login...")
+            // Show login window on launch if not authenticated
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                self.showLogin()
+            }
         }
     }
     
@@ -53,14 +58,27 @@ class SimpleAsanaBridgeApp: NSObject, NSApplicationDelegate {
             return
         }
         
-        // Use SF Symbol or simple icon
-        if #available(macOS 11.0, *) {
+        // Try to load app icon from bundle first
+        if let appIconPath = Bundle.main.path(forResource: "AsanaBridge", ofType: "icns"),
+           let appIcon = NSImage(contentsOfFile: appIconPath) {
+            let iconSize = NSSize(width: 18, height: 18)
+            appIcon.size = iconSize
+            appIcon.isTemplate = true
+            button.image = appIcon
+            print("✅ Using app icon from bundle")
+        }
+        // Fallback to SF Symbol
+        else if #available(macOS 11.0, *) {
             if let image = NSImage(systemSymbolName: "link.circle.fill", accessibilityDescription: "AsanaBridge") {
                 image.isTemplate = true
                 button.image = image
+                print("✅ Using SF Symbol icon")
             }
-        } else {
+        }
+        // Last resort: text
+        else {
             button.title = "AB"
+            print("⚠️ Using text fallback")
         }
         
         button.action = #selector(menuBarClicked)
@@ -74,22 +92,39 @@ class SimpleAsanaBridgeApp: NSObject, NSApplicationDelegate {
         
         let menu = NSMenu()
         
+        // Title
+        let titleItem = NSMenuItem(title: "AsanaBridge", action: nil, keyEquivalent: "")
+        titleItem.isEnabled = false
+        menu.addItem(titleItem)
+        
+        menu.addItem(NSMenuItem.separator())
+        
         // Status
-        if userToken != nil {
-            menu.addItem(NSMenuItem(title: "✅ Connected", action: nil, keyEquivalent: ""))
+        if let token = userToken, !token.isEmpty {
+            let statusItem = NSMenuItem(title: "✅ Connected & Syncing", action: nil, keyEquivalent: "")
+            statusItem.isEnabled = false
+            menu.addItem(statusItem)
         } else {
-            menu.addItem(NSMenuItem(title: "❌ Not Connected", action: nil, keyEquivalent: ""))
+            let statusItem = NSMenuItem(title: "❌ Not Connected", action: nil, keyEquivalent: "")
+            statusItem.isEnabled = false
+            menu.addItem(statusItem)
         }
         
         menu.addItem(NSMenuItem.separator())
         
         // Actions
         if userToken != nil {
-            let signOutItem = NSMenuItem(title: "Sign Out", action: #selector(signOut), keyEquivalent: "")
+            let openDashboardItem = NSMenuItem(title: "Open Dashboard...", action: #selector(openDashboard), keyEquivalent: "")
+            openDashboardItem.target = self
+            menu.addItem(openDashboardItem)
+            
+            menu.addItem(NSMenuItem.separator())
+            
+            let signOutItem = NSMenuItem(title: "Sign Out & Disconnect", action: #selector(signOut), keyEquivalent: "")
             signOutItem.target = self
             menu.addItem(signOutItem)
         } else {
-            let signInItem = NSMenuItem(title: "Sign In", action: #selector(showLogin), keyEquivalent: "")
+            let signInItem = NSMenuItem(title: "Sign In...", action: #selector(showLogin), keyEquivalent: "")
             signInItem.target = self
             menu.addItem(signInItem)
         }
@@ -97,7 +132,7 @@ class SimpleAsanaBridgeApp: NSObject, NSApplicationDelegate {
         menu.addItem(NSMenuItem.separator())
         
         // Quit
-        let quitItem = NSMenuItem(title: "Quit", action: #selector(quit), keyEquivalent: "q")
+        let quitItem = NSMenuItem(title: "Quit AsanaBridge", action: #selector(quit), keyEquivalent: "q")
         quitItem.target = self
         menu.addItem(quitItem)
         
@@ -107,6 +142,12 @@ class SimpleAsanaBridgeApp: NSObject, NSApplicationDelegate {
         // Clear menu after showing to avoid conflicts
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
             statusItem.menu = nil
+        }
+    }
+    
+    @objc func openDashboard() {
+        if let url = URL(string: baseURL) {
+            NSWorkspace.shared.open(url)
         }
     }
     
@@ -136,78 +177,48 @@ class SimpleAsanaBridgeApp: NSObject, NSApplicationDelegate {
     @objc func showLogin() {
         print("🔑 Showing login...")
         
-        // Create login window
-        let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 500, height: 300),
-            styleMask: [.titled, .closable],
-            backing: .buffered,
-            defer: false
-        )
-        window.title = "AsanaBridge Login"
-        window.center()
-        
-        let containerView = NSView(frame: NSRect(x: 0, y: 0, width: 500, height: 300))
-        
-        // Title
-        let titleLabel = NSTextField(labelWithString: "Sign in to AsanaBridge")
-        titleLabel.font = NSFont.boldSystemFont(ofSize: 20)
-        titleLabel.frame = NSRect(x: 50, y: 220, width: 400, height: 30)
-        titleLabel.alignment = .center
-        containerView.addSubview(titleLabel)
-        
-        // Instructions
-        let instructionsLabel = NSTextField(labelWithString: "Click the button below to sign in with your browser")
-        instructionsLabel.font = NSFont.systemFont(ofSize: 14)
-        instructionsLabel.textColor = .secondaryLabelColor
-        instructionsLabel.frame = NSRect(x: 50, y: 180, width: 400, height: 20)
-        instructionsLabel.alignment = .center
-        containerView.addSubview(instructionsLabel)
-        
-        // Login button
-        let loginButton = NSButton(title: "Sign In with Browser", target: self, action: #selector(startBrowserLogin))
-        loginButton.frame = NSRect(x: 150, y: 120, width: 200, height: 40)
-        loginButton.bezelStyle = .rounded
-        containerView.addSubview(loginButton)
-        
-        // Status label
-        let statusLabel = NSTextField(labelWithString: "")
-        statusLabel.font = NSFont.systemFont(ofSize: 12)
-        statusLabel.textColor = .secondaryLabelColor
-        statusLabel.frame = NSRect(x: 50, y: 80, width: 400, height: 20)
-        statusLabel.alignment = .center
-        containerView.addSubview(statusLabel)
-        
-        window.contentView = containerView
-        
+        // Activate app to show window
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
-        window.makeKeyAndOrderFront(nil)
-    }
-    
-    @objc func startBrowserLogin() {
-        print("🌐 Starting browser login...")
         
-        // Open browser for authentication
-        let authURL = "\(baseURL)/auth/desktop"
-        if let url = URL(string: authURL) {
-            NSWorkspace.shared.open(url)
+        // Show alert with login instructions
+        let alert = NSAlert()
+        alert.messageText = "Welcome to AsanaBridge!"
+        alert.informativeText = "To get started:\n\n1. Click 'Open Dashboard' to sign in via your browser\n2. After signing in, copy your authentication token\n3. Click 'Enter Token' and paste it\n\nThe app will then sync your OmniFocus tasks automatically."
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "Open Dashboard")
+        alert.addButton(withTitle: "Enter Token")
+        alert.addButton(withTitle: "Cancel")
+        
+        let response = alert.runModal()
+        
+        if response == .alertFirstButtonReturn {
+            // Open dashboard
+            if let url = URL(string: "\(baseURL)/login") {
+                NSWorkspace.shared.open(url)
+            }
+            // Show token input after a delay
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                self.showTokenInput()
+            }
+        } else if response == .alertSecondButtonReturn {
+            // Go straight to token input
+            showTokenInput()
+        } else {
+            // Cancel - go back to menu bar mode
+            NSApp.setActivationPolicy(.accessory)
         }
-        
-        // Start polling for token (simple approach)
-        // In production, you'd use a local server or deep link
-        // For now, just show instructions to paste token
-        showTokenInput()
     }
     
     func showTokenInput() {
         let alert = NSAlert()
-        alert.messageText = "Enter Token"
-        alert.informativeText = "After signing in, copy your token from the browser and paste it here."
-        alert.addButton(withTitle: "Submit")
+        alert.messageText = "Enter Authentication Token"
+        alert.informativeText = "Copy your token from the dashboard and paste it below.\n\nYou can find it on your Account page after signing in."
+        alert.addButton(withTitle: "Connect")
         alert.addButton(withTitle: "Cancel")
         
-        let inputField = NSTextField(frame: NSRect(x: 0, y: 0, width: 300, height: 24))
-        inputField.placeholderString = "Paste token here..."
+        let inputField = NSTextField(frame: NSRect(x: 0, y: 0, width: 400, height: 24))
+        inputField.placeholderString = "Paste your token here..."
         alert.accessoryView = inputField
         
         let response = alert.runModal()
@@ -217,20 +228,36 @@ class SimpleAsanaBridgeApp: NSObject, NSApplicationDelegate {
                 saveToken(token)
                 startSync()
                 
-                // Close any open windows
-                for window in NSApp.windows {
-                    if window.title == "AsanaBridge Login" {
-                        window.close()
-                    }
-                }
+                // Show success message
+                let successAlert = NSAlert()
+                successAlert.messageText = "✅ Connected!"
+                successAlert.informativeText = "AsanaBridge is now syncing your OmniFocus tasks.\n\nYou'll see the icon in your menu bar."
+                successAlert.alertStyle = .informational
+                successAlert.runModal()
+                
+                // Return to menu bar mode
+                NSApp.setActivationPolicy(.accessory)
+            } else {
+                let errorAlert = NSAlert()
+                errorAlert.messageText = "Invalid Token"
+                errorAlert.informativeText = "Please enter a valid authentication token."
+                errorAlert.alertStyle = .warning
+                errorAlert.runModal()
             }
+        } else {
+            // Return to menu bar mode
+            NSApp.setActivationPolicy(.accessory)
         }
     }
     
     @objc func signOut() {
+        NSApp.setActivationPolicy(.regular)
+        NSApp.activate(ignoringOtherApps: true)
+        
         let alert = NSAlert()
-        alert.messageText = "Sign Out"
-        alert.informativeText = "Are you sure you want to sign out?"
+        alert.messageText = "Sign Out & Disconnect?"
+        alert.informativeText = "This will:\n• Stop syncing your OmniFocus tasks\n• Remove your authentication token\n• Require you to sign in again to resume syncing\n\nAre you sure?"
+        alert.alertStyle = .warning
         alert.addButton(withTitle: "Sign Out")
         alert.addButton(withTitle: "Cancel")
         
@@ -238,10 +265,13 @@ class SimpleAsanaBridgeApp: NSObject, NSApplicationDelegate {
             clearToken()
             
             let successAlert = NSAlert()
-            successAlert.messageText = "Signed Out"
-            successAlert.informativeText = "You have been signed out successfully."
+            successAlert.messageText = "Signed Out Successfully"
+            successAlert.informativeText = "AsanaBridge has been disconnected.\n\nYou can sign in again from the menu bar icon."
+            successAlert.alertStyle = .informational
             successAlert.runModal()
         }
+        
+        NSApp.setActivationPolicy(.accessory)
     }
     
     // MARK: - Sync
