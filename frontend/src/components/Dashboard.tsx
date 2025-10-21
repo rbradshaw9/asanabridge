@@ -154,9 +154,21 @@ const RecentSyncsSection: React.FC = () => {
   const fetchRecentSyncs = async () => {
     try {
       setLoading(true);
-      const response = await authApi('/api/agent/recent-syncs');
-      if (response.logs) {
-        setSyncs(response.logs);
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/agent/recent-syncs', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      
+      const data = await response.json();
+      if (data.logs) {
+        setSyncs(data.logs);
       }
     } catch (err: any) {
       console.error('Failed to fetch recent syncs:', err);
