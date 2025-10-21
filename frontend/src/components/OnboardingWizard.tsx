@@ -55,7 +55,7 @@ const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
     {
       id: 'download-app',
       title: 'Download macOS App',
-      description: 'Download the app, open it, and click "Connect to AsanaBridge" - that\'s it!',
+      description: 'Download the app, open it, and sign in with your email and password - that\'s it!',
       isCompleted: agentStatus.connected,
       isOptional: false
     },
@@ -232,7 +232,7 @@ const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
               <div className="bg-blue-500/20 border border-blue-500/50 rounded-lg p-4 mb-6">
                 <div className="space-y-4">
                   <p className="text-blue-200 text-lg font-medium">
-                    � Super Simple Setup
+                    🚀 Super Simple Setup
                   </p>
                   <div className="space-y-3">
                     <div className="flex items-start gap-3">
@@ -241,16 +241,16 @@ const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                     </div>
                     <div className="flex items-start gap-3">
                       <div className="w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-sm font-semibold mt-0.5">2</div>
-                      <p className="text-blue-200 text-sm">Open the app (it will show your connection status automatically)</p>
+                      <p className="text-blue-200 text-sm">Open the app - it will show a login dialog</p>
                     </div>
                     <div className="flex items-start gap-3">
                       <div className="w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-sm font-semibold mt-0.5">3</div>
-                      <p className="text-blue-200 text-sm">Click "Connect to AsanaBridge" and you're done!</p>
+                      <p className="text-blue-200 text-sm">Sign in with your email and password - that's it!</p>
                     </div>
                   </div>
                   <div className="bg-green-500/20 border border-green-500/50 rounded-lg p-3 mt-4">
                     <p className="text-green-200 text-sm">
-                      ✨ <strong>No complex setup required!</strong> No keys to copy, no manual configuration - just download and connect.
+                      ✨ <strong>No complex setup required!</strong> Just download, sign in, and start syncing.
                     </p>
                   </div>
                 </div>
