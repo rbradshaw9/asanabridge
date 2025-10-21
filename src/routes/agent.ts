@@ -517,6 +517,37 @@ router.get('/status', authenticateToken, async (req: AuthenticatedRequest, res: 
   }
 });
 
+// Disconnect agent (mark as inactive)
+router.post('/disconnect', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const userId = req.user!.userId;
+
+    const setup = await prisma.omniFocusSetup.findUnique({
+      where: { userId }
+    });
+
+    if (!setup) {
+      return res.status(404).json({ error: 'No agent setup found' });
+    }
+
+    // Mark agent as inactive
+    await prisma.omniFocusSetup.update({
+      where: { id: setup.id },
+      data: { isActive: false }
+    });
+
+    logger.info('Agent disconnected by user', { userId });
+
+    res.json({ 
+      success: true,
+      message: 'Agent disconnected successfully' 
+    });
+  } catch (error) {
+    logger.error('Failed to disconnect agent', error);
+    res.status(500).json({ error: 'Failed to disconnect agent' });
+  }
+});
+
 // Simple test endpoint to verify routes are working
 router.get('/test', (_req: Request, res: Response) => {
   res.json({ message: 'Agent routes working!', timestamp: new Date().toISOString() });
