@@ -8,6 +8,7 @@ class SimpleAsanaBridgeApp: NSObject, NSApplicationDelegate {
     var statusItem: NSStatusItem?
     var userToken: String?
     var syncTimer: Timer?
+    var heartbeatTimer: Timer?
     
     #if DEBUG
     let baseURL = "http://localhost:3000"
@@ -46,6 +47,8 @@ class SimpleAsanaBridgeApp: NSObject, NSApplicationDelegate {
         // Cleanup
         syncTimer?.invalidate()
         syncTimer = nil
+        heartbeatTimer?.invalidate()
+        heartbeatTimer = nil
     }
     
     // MARK: - Menu Bar
@@ -171,6 +174,8 @@ class SimpleAsanaBridgeApp: NSObject, NSApplicationDelegate {
         UserDefaults.standard.removeObject(forKey: "userToken")
         syncTimer?.invalidate()
         syncTimer = nil
+        heartbeatTimer?.invalidate()
+        heartbeatTimer = nil
         print("✅ Token cleared")
     }
     
@@ -332,13 +337,23 @@ class SimpleAsanaBridgeApp: NSObject, NSApplicationDelegate {
         // Register with server
         registerAgent()
         
+        // Start heartbeat timer (every 60 seconds)
+        heartbeatTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
+            self?.sendHeartbeat()
+        }
+        
+        // Send initial heartbeat after 5 seconds
+        DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
+            self.sendHeartbeat()
+        }
+        
         // Start periodic sync (every 5 minutes)
         syncTimer = Timer.scheduledTimer(withTimeInterval: 300, repeats: true) { [weak self] _ in
             self?.performSync()
         }
         
-        // Do initial sync after 5 seconds
-        DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
+        // Do initial sync after 10 seconds
+        DispatchQueue.main.asyncAfter(deadline: .now() + 10) {
             self.performSync()
         }
     }
@@ -364,6 +379,31 @@ class SimpleAsanaBridgeApp: NSObject, NSApplicationDelegate {
                 return
             }
             print("✅ Agent registered")
+        }.resume()
+    }
+    
+    func sendHeartbeat() {
+        guard let token = userToken else { return }
+        
+        let url = URL(string: "\(baseURL)/api/agent/heartbeat")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        let body: [String: Any] = [
+            "status": "active",
+            "omnifocus_connected": true,
+            "last_sync": Date().timeIntervalSince1970
+        ]
+        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
+        
+        URLSession.shared.dataTask(with: request) { data, response, error in
+            if let error = error {
+                print("⚠️ Heartbeat error: \(error)")
+                return
+            }
+            print("💓 Heartbeat sent")
         }.resume()
     }
     
