@@ -1,0 +1,92 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  ci:
+    name: Lint, typecheck & test
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: asanabridge_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      NODE_VERSION: '20'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build shared package
+        run: npm run build --workspace=packages/shared
+
+      # ─── API ───────────────────────────────────────────────────────────────
+
+      - name: API — typecheck
+        run: npm run typecheck --workspace=apps/api
+
+      - name: API — lint
+        run: npm run lint --workspace=apps/api
+        continue-on-error: true
+
+      - name: API — Prisma generate
+        run: npx prisma generate
+        working-directory: apps/api
+        env:
+          DATABASE_URL: postgresql://test:test@localhost:5432/asanabridge_test
+
+      - name: API — Prisma migrate
+        run: npx prisma migrate deploy
+        working-directory: apps/api
+        env:
+          DATABASE_URL: postgresql://test:test@localhost:5432/asanabridge_test
+
+      - name: API — test
+        run: npm run test --workspace=apps/api
+        env:
+          DATABASE_URL: postgresql://test:test@localhost:5432/asanabridge_test
+          JWT_SECRET: ci-test-secret-that-is-long-enough-32ch
+          NODE_ENV: test
+          ASANA_CLIENT_ID: ci_asana_client_id
+          ASANA_CLIENT_SECRET: ci_asana_client_secret
+          ASANA_REDIRECT_URI: http://localhost:3001/api/oauth/asana/callback
+          FRONTEND_URL: http://localhost:5173
+          DOWNLOAD_BASE_URL: https://example.com
+
+      # ─── Web ───────────────────────────────────────────────────────────────
+
+      - name: Web — typecheck
+        run: npm run typecheck --workspace=apps/web
+
+      - name: Web — lint
+        run: npm run lint --workspace=apps/web
+        continue-on-error: true
+
+      - name: Web — build
+        run: npm run build --workspace=apps/web
+        env:
+          VITE_API_URL: https://api.asanabridge.com
