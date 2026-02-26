@@ -73,7 +73,7 @@ router.get('/users/:userId', async (req: AuthenticatedRequest, res: Response) =>
           take: 5,
           select: { id: true, status: true, itemsSynced: true, createdAt: true },
         },
-        omniFocusSetup: {
+        omnifocusSetup: {
           select: { isActive: true, version: true, updatedAt: true },
         },
       },
@@ -190,7 +190,7 @@ router.get('/support', async (req: AuthenticatedRequest, res: Response) => {
         where,
         include: {
           user: { select: { id: true, email: true, name: true, plan: true } },
-          responses: { orderBy: { createdAt: 'asc' }, include: { author: { select: { id: true, name: true, isAdmin: true } } } },
+          responses: { orderBy: { createdAt: 'asc' } },
         },
         orderBy: { createdAt: 'desc' },
         skip,
@@ -208,7 +208,7 @@ router.get('/support', async (req: AuthenticatedRequest, res: Response) => {
 router.patch('/support/:ticketId/status', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { status } = z
-      .object({ status: z.enum(['OPEN', 'IN_PROGRESS', 'RESOLVED', 'CLOSED']) })
+      .object({ status: z.enum(['OPEN', 'IN_PROGRESS', 'WAITING', 'CLOSED']) })
       .parse(req.body);
 
     const ticket = await prisma.supportTicket.update({
@@ -226,16 +226,14 @@ router.patch('/support/:ticketId/status', async (req: AuthenticatedRequest, res:
 
 router.post('/support/:ticketId/respond', async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const { body } = z.object({ body: z.string().min(1).max(5000) }).parse(req.body);
+    const { message } = z.object({ message: z.string().min(1).max(5000) }).parse(req.body);
 
-    const response = await prisma.supportResponse.create({
+    const response = await prisma.supportTicketResponse.create({
       data: {
         ticketId: req.params.ticketId,
-        authorId: req.user!.userId,
-        body,
-        isAdminResponse: true,
+        message,
+        isFromUser: false,
       },
-      include: { author: { select: { id: true, name: true, isAdmin: true } } },
     });
 
     // Move ticket to IN_PROGRESS if it was OPEN

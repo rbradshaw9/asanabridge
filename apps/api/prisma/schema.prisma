@@ -195,6 +195,7 @@ model SupportTicket {
   name     String
   email    String
   subject  String
+  message  String
   category SupportCategory     @default(GENERAL)
   priority SupportPriority     @default(NORMAL)
   status   SupportTicketStatus @default(OPEN)

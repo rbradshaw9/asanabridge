@@ -6,7 +6,7 @@ builder = "nixpacks"
 buildCommand = "cd apps/api && npx prisma generate && npm run build"
 
 [deploy]
-startCommand = "cd apps/api && npx prisma migrate deploy && node dist/server.js"
+startCommand = "cd apps/api && npx prisma db push && node dist/server.js"
 healthcheckPath = "/health"
 healthcheckTimeout = 30
 restartPolicyType = "on_failure"

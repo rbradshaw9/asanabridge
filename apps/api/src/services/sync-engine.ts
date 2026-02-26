@@ -11,6 +11,7 @@ import {
   ConflictStrategy,
   AgentTask,
 } from './data-mapper';
+import { Prisma } from '@prisma/client';
 import { prisma } from '../config/database';
 import { syncLogger } from '../config/logger';
 
@@ -147,7 +148,7 @@ export class SyncEngine {
       data: {
         setupId: setup.id,
         type,
-        payload,
+        payload: payload as Prisma.InputJsonValue,
       },
     });
 

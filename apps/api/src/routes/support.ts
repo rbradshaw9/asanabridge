@@ -17,8 +17,10 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
     const ticket = await prisma.supportTicket.create({
       data: {
         userId: req.user!.userId,
+        name: data.name,
+        email: data.email,
         subject: data.subject,
-        body: data.message,
+        message: data.message,
         category: data.category,
         priority: data.priority ?? 'NORMAL',
         status: 'OPEN',
@@ -42,7 +44,6 @@ router.get('/', async (req: AuthenticatedRequest, res: Response) => {
       include: {
         responses: {
           orderBy: { createdAt: 'asc' },
-          include: { author: { select: { id: true, name: true, isAdmin: true } } },
         },
       },
       orderBy: { updatedAt: 'desc' },
@@ -62,7 +63,6 @@ router.get('/:ticketId', async (req: AuthenticatedRequest, res: Response) => {
       include: {
         responses: {
           orderBy: { createdAt: 'asc' },
-          include: { author: { select: { id: true, name: true, isAdmin: true } } },
         },
       },
     });
@@ -87,18 +87,16 @@ router.post('/:ticketId/reply', async (req: AuthenticatedRequest, res: Response)
       return res.status(400).json({ error: 'Cannot reply to a closed ticket' });
     }
 
-    const response = await prisma.supportResponse.create({
+    const response = await prisma.supportTicketResponse.create({
       data: {
         ticketId: req.params.ticketId,
-        authorId: req.user!.userId,
-        body,
-        isAdminResponse: false,
+        message: body,
+        isFromUser: true,
       },
-      include: { author: { select: { id: true, name: true, isAdmin: true } } },
     });
 
-    // Reopen if resolved
-    if (ticket.status === 'RESOLVED') {
+    // Reopen if waiting
+    if (ticket.status === 'WAITING') {
       await prisma.supportTicket.update({
         where: { id: ticket.id },
         data: { status: 'OPEN' },
