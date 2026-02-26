@@ -3,7 +3,7 @@
 
 [build]
 builder = "nixpacks"
-buildCommand = "cd apps/api && npm ci && npx prisma generate && npm run build"
+buildCommand = "cd apps/api && npx prisma generate && npm run build"
 
 [deploy]
 startCommand = "cd apps/api && npx prisma migrate deploy && node dist/server.js"
